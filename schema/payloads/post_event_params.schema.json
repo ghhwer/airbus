@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://airbus.local/schema/payloads/post_event_params.schema.json",
+  "title": "PostEventParams",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["queue", "event"],
+  "properties": {
+    "queue": {
+      "$ref": "common.schema.json#/$defs/QueueName"
+    },
+    "event": {
+      "$ref": "common.schema.json#/$defs/EventObject"
+    }
+  }
+}

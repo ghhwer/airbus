@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://airbus.local/schema/payloads/common.schema.json",
+  "title": "Common",
+  "$defs": {
+    "QueueName": {
+      "title": "QueueName",
+      "type": "string",
+      "minLength": 1
+    },
+    "EventObject": {
+      "title": "EventObject",
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

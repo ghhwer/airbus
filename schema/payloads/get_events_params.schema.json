@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://airbus.local/schema/payloads/get_events_params.schema.json",
+  "title": "GetEventsParams",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["queue"],
+  "properties": {
+    "queue": {
+      "$ref": "common.schema.json#/$defs/QueueName"
+    },
+    "count": {
+      "type": "integer",
+      "default": 1
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://airbus.local/schema/payloads/add_params.schema.json",
+  "title": "AddParams",
+  "type": "array",
+  "items": { "type": "number" },
+  "minItems": 2,
+  "maxItems": 2
+}

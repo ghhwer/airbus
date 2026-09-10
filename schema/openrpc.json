@@ -1,0 +1,81 @@
+{
+  "openrpc": "1.3.2",
+  "info": {
+    "title": "Airbus",
+    "version": "0.1.0",
+    "description": "Method catalog for Airbus JSON-RPC. Payload shapes live under schema/payloads/; the JSON-RPC envelope is not defined here."
+  },
+  "methods": [
+    {
+      "name": "ping",
+      "summary": "Liveness check",
+      "params": [],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "payloads/ping_result.schema.json"
+        }
+      }
+    },
+    {
+      "name": "add",
+      "summary": "Add two numbers",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "params",
+          "required": true,
+          "schema": {
+            "$ref": "payloads/add_params.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "payloads/add_result.schema.json"
+        }
+      }
+    },
+    {
+      "name": "post_event",
+      "summary": "Publish an event onto a named queue",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": true,
+          "schema": {
+            "$ref": "payloads/post_event_params.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "payloads/post_event_result.schema.json"
+        }
+      }
+    },
+    {
+      "name": "get_events",
+      "summary": "Consume events from a named queue",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": true,
+          "schema": {
+            "$ref": "payloads/get_events_params.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "payloads/get_events_result.schema.json"
+        }
+      }
+    }
+  ]
+}
