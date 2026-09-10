@@ -3,22 +3,23 @@ TARGET_DIR := out
 TARGET := $(TARGET_DIR)/airbus
 SCHEMA_DIR := schema/payloads
 
-.PHONY: all clean run setup client test test-unit test-integration generate
+.PHONY: all clean run setup client test test-unit test-integration generate build
 
-all: $(TARGET)
+all: build
 
-$(TARGET):
+build:
 	mkdir -p $(TARGET_DIR)
 	cargo build --release
 	cp -f target/release/airbus $(TARGET)
 
-run: $(TARGET)
+run: build
 	./$(TARGET) --listen 127.0.0.1:9097
 
+# Prefer the repo-root uv workspace (editable airbus-client + shared .venv).
 setup:
-	cd $(CLIENT_DIR) && uv sync
+	cd .. && uv sync --package airbus-client --all-groups
 
-client: $(TARGET) setup
+client: build setup
 	cd $(CLIENT_DIR) && AIRBUS_BIN="$(CURDIR)/$(TARGET)" uv run python -m airbus_client
 
 # Regenerate Rust + Python payload types from schema/payloads/*.schema.json
@@ -29,7 +30,7 @@ generate: setup
 test-unit:
 	cargo test
 
-test-integration: $(TARGET) setup
+test-integration: build setup
 	cd $(CLIENT_DIR) && AIRBUS_BIN="$(CURDIR)/$(TARGET)" uv run pytest
 
 test: test-unit test-integration

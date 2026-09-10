@@ -10,7 +10,7 @@ pub struct UuidV7 {
 }
 
 thread_local! {
-    static RNG_STATE: Cell<u64> = Cell::new(0x9E37_79B9_7F4A_7C15);
+    static RNG_STATE: Cell<u64> = const { Cell::new(0x9E37_79B9_7F4A_7C15) };
 }
 
 fn next_u64() -> u64 {
@@ -68,9 +68,24 @@ impl UuidV7 {
 
         Self { bytes }
     }
+}
 
-    pub fn to_string(&self) -> String {
-        format!(
+impl Ord for UuidV7 {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.bytes.cmp(&other.bytes)
+    }
+}
+
+impl PartialOrd for UuidV7 {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl fmt::Display for UuidV7 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
             "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
             self.bytes[0],
             self.bytes[1],
@@ -92,27 +107,9 @@ impl UuidV7 {
     }
 }
 
-impl Ord for UuidV7 {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.bytes.cmp(&other.bytes)
-    }
-}
-
-impl PartialOrd for UuidV7 {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl fmt::Display for UuidV7 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.to_string())
-    }
-}
-
 impl fmt::Debug for UuidV7 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.to_string())
+        fmt::Display::fmt(self, f)
     }
 }
 

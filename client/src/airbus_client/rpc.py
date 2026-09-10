@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import socket
+from collections.abc import Callable
 from contextlib import AbstractContextManager
 from contextvars import ContextVar, Token
 from dataclasses import asdict, is_dataclass
-from typing import Any, Callable, Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from airbus_client.payloads import (
     AddParams,
