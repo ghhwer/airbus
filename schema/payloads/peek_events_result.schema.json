@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://airbus.local/schema/payloads/peek_events_result.schema.json",
+  "title": "PeekEventsResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["queue", "events"],
+  "properties": {
+    "queue": {
+      "$ref": "common.schema.json#/$defs/QueueName"
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "event"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "event": {
+            "$ref": "common.schema.json#/$defs/EventObject"
+          }
+        }
+      }
+    }
+  }
+}

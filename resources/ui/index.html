@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Airbus</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="top">
+        <div class="brand">
+          <span class="mark" aria-hidden="true"></span>
+          <h1>Airbus</h1>
+        </div>
+        <div class="topline">
+          <span id="live" class="live">offline</span>
+          <span id="totals" class="totals"></span>
+        </div>
+      </header>
+
+      <div class="layout">
+        <aside class="rail">
+          <div class="rail-head">
+            <h2>Queues</h2>
+            <span id="queue-count" class="chip">0</span>
+          </div>
+          <div id="queue-list" class="queue-list">
+            <p class="empty">No queues yet — post an event to create one.</p>
+          </div>
+          <div class="rail-foot">
+            <label class="field compact">
+              <span>New / select</span>
+              <input id="queue-name" type="text" value="demo" spellcheck="false" />
+            </label>
+          </div>
+        </aside>
+
+        <section class="stage">
+          <div class="stage-head">
+            <div>
+              <p class="eyebrow">FIFO · head → tail</p>
+              <h2 id="stage-title">Select a queue</h2>
+            </div>
+            <div class="metrics">
+              <div class="metric">
+                <span class="metric-label">Depth</span>
+                <span id="m-depth" class="metric-value">—</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">Δ / poll</span>
+                <span id="m-rate" class="metric-value">—</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="fill-track" title="Relative fullness (depth vs soft ceiling)" aria-hidden="true">
+            <div id="fill-bar" class="fill-bar"></div>
+          </div>
+
+          <div class="lane-labels">
+            <span>head · next out</span>
+            <span>tail · newest</span>
+          </div>
+          <div id="lane" class="lane">
+            <p class="empty">Pick a queue on the left to see ordering.</p>
+          </div>
+
+          <div class="actions">
+            <div class="action-group">
+              <label class="field compact">
+                <span>Type</span>
+                <input id="post-type" type="text" value="hello" spellcheck="false" />
+              </label>
+              <label class="field compact narrow">
+                <span>n</span>
+                <input id="post-n" type="number" value="1" />
+              </label>
+              <button type="button" id="post-btn" class="btn primary">Enqueue</button>
+            </div>
+            <div class="action-group">
+              <label class="field compact narrow">
+                <span>Take</span>
+                <input id="get-count" type="number" min="1" value="1" />
+              </label>
+              <button type="button" id="get-btn" class="btn danger">Dequeue</button>
+              <button type="button" id="refresh-btn" class="btn ghost">Refresh</button>
+            </div>
+          </div>
+
+          <details class="advanced">
+            <summary>Custom event JSON</summary>
+            <textarea id="post-event" rows="5" spellcheck="false">{
+  "type": "hello",
+  "n": 1
+}</textarea>
+            <button type="button" id="post-json-btn" class="btn ghost">Enqueue JSON</button>
+          </details>
+        </section>
+      </div>
+    </div>
+    <script src="/app.js"></script>
+  </body>
+</html>

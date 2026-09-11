@@ -1,6 +1,8 @@
 use crate::proto::payloads::{
-    AddParams, AddResult, EventObject, GetEventsParams, GetEventsResult, PingResult,
-    PostEventParams, PostEventResult, PostEventResultId, QueueName,
+    AddParams, AddResult, EventObject, GetEventsParams, GetEventsResult, ListQueuesResult,
+    ListQueuesResultQueuesItem, PeekEventsParams, PeekEventsResult, PeekEventsResultEventsItem,
+    PeekEventsResultEventsItemId, PingResult, PostEventParams, PostEventResult, PostEventResultId,
+    QueueName,
 };
 use crate::runtime::queue::QueueManager;
 use crate::runtime::UuidV7;
@@ -71,18 +73,57 @@ impl AppService {
             .queue_manager
             .consume(params.queue.as_str(), params.count)
             .into_iter()
-            .map(|v| match v {
-                Value::Object(map) => EventObject(map),
-                other => {
-                    let mut map = serde_json::Map::new();
-                    map.insert("_".into(), other);
-                    EventObject(map)
-                }
-            })
+            .map(value_as_event_object)
             .collect();
         GetEventsResult {
             queue: params.queue,
             events,
+        }
+    }
+
+    pub fn list_queues(&self) -> ListQueuesResult {
+        let queues = self
+            .queue_manager
+            .list()
+            .into_iter()
+            .filter_map(|(name, depth)| {
+                let name = QueueName::try_from(name).ok()?;
+                Some(ListQueuesResultQueuesItem {
+                    name,
+                    depth: depth as u64,
+                })
+            })
+            .collect();
+        ListQueuesResult { queues }
+    }
+
+    pub fn peek_events(&self, params: PeekEventsParams) -> Result<PeekEventsResult, InvalidParams> {
+        let events = self
+            .queue_manager
+            .peek(params.queue.as_str(), params.count)
+            .into_iter()
+            .map(|(id, value)| {
+                Ok(PeekEventsResultEventsItem {
+                    id: PeekEventsResultEventsItemId::try_from(id.to_string())
+                        .map_err(|e| InvalidParams::new(e.to_string()))?,
+                    event: value_as_event_object(value),
+                })
+            })
+            .collect::<Result<Vec<_>, InvalidParams>>()?;
+        Ok(PeekEventsResult {
+            queue: params.queue,
+            events,
+        })
+    }
+}
+
+fn value_as_event_object(value: Value) -> EventObject {
+    match value {
+        Value::Object(map) => EventObject(map),
+        other => {
+            let mut map = serde_json::Map::new();
+            map.insert("_".into(), other);
+            EventObject(map)
         }
     }
 }

@@ -1,4 +1,4 @@
-//! Airbus library: layered JSON-RPC over TCP with in-process event queues.
+//! Airbus library: layered JSON-RPC over TCP (optional HTTP) with in-process event queues.
 //!
 //! Layers are composed, not subclassed. `AppService` has no TCP or JSON-RPC types;
 //! `wiring` / `main` attach it to `RpcServer`.

@@ -2,6 +2,8 @@ CLIENT_DIR := client
 TARGET_DIR := out
 TARGET := $(TARGET_DIR)/airbus
 SCHEMA_DIR := schema/payloads
+HTTP_URL ?= 127.0.0.1:9098
+RESOURCES ?= $(CURDIR)/resources/ui
 
 .PHONY: all clean run setup client test test-unit test-integration generate build
 
@@ -13,7 +15,7 @@ build:
 	cp -f target/release/airbus $(TARGET)
 
 run: build
-	./$(TARGET) --listen 127.0.0.1:9097
+	./$(TARGET) --listen 127.0.0.1:9097 --http $(HTTP_URL) --resources $(RESOURCES)
 
 # Prefer the repo-root uv workspace (editable airbus-client + shared .venv).
 setup:

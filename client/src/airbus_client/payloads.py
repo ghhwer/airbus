@@ -34,3 +34,32 @@ class GetEventsParams:
 class GetEventsResult:
     queue: str
     events: list[dict[str, Any]]
+
+
+@dataclass
+class Queue:
+    name: str
+    depth: int
+
+
+@dataclass
+class ListQueuesResult:
+    queues: list[Queue]
+
+
+@dataclass
+class PeekEventsParams:
+    queue: str
+    count: int | None = 1
+
+
+@dataclass
+class Event:
+    id: str
+    event: dict[str, Any]
+
+
+@dataclass
+class PeekEventsResult:
+    queue: str
+    events: list[Event]

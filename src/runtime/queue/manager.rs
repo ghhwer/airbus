@@ -47,6 +47,40 @@ impl QueueManager {
         };
         result
     }
+
+    pub fn list(&self) -> Vec<(String, usize)> {
+        let map = match self.queues.lock() {
+            Ok(m) => m,
+            Err(_) => return Vec::new(),
+        };
+        let mut out: Vec<(String, usize)> = map
+            .iter()
+            .filter_map(|(name, queue)| {
+                let depth = queue.lock().ok()?.depth();
+                Some((name.clone(), depth))
+            })
+            .collect();
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out
+    }
+
+    pub fn peek(&self, queue_name: &str, event_count: i64) -> Vec<(UuidV7, Value)> {
+        let queue = {
+            let map = match self.queues.lock() {
+                Ok(m) => m,
+                Err(_) => return Vec::new(),
+            };
+            match map.get(queue_name) {
+                Some(q) => q.clone(),
+                None => return Vec::new(),
+            }
+        };
+        let result = match queue.lock() {
+            Ok(q) => q.peek(event_count),
+            Err(_) => Vec::new(),
+        };
+        result
+    }
 }
 
 impl Default for QueueManager {

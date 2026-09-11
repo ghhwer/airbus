@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://airbus.local/schema/payloads/peek_events_params.schema.json",
+  "title": "PeekEventsParams",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["queue"],
+  "properties": {
+    "queue": {
+      "$ref": "common.schema.json#/$defs/QueueName"
+    },
+    "count": {
+      "type": "integer",
+      "default": 1
+    }
+  }
+}

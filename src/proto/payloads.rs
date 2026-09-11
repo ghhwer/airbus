@@ -81,6 +81,9 @@ pub enum AirbusPayloadRoot {
     PostEventResult(PostEventResult),
     GetEventsParams(GetEventsParams),
     GetEventsResult(GetEventsResult),
+    ListQueuesResult(ListQueuesResult),
+    PeekEventsParams(PeekEventsParams),
+    PeekEventsResult(PeekEventsResult),
 }
 impl ::std::convert::From<QueueName> for AirbusPayloadRoot {
     fn from(value: QueueName) -> Self {
@@ -127,6 +130,21 @@ impl ::std::convert::From<GetEventsResult> for AirbusPayloadRoot {
         Self::GetEventsResult(value)
     }
 }
+impl ::std::convert::From<ListQueuesResult> for AirbusPayloadRoot {
+    fn from(value: ListQueuesResult) -> Self {
+        Self::ListQueuesResult(value)
+    }
+}
+impl ::std::convert::From<PeekEventsParams> for AirbusPayloadRoot {
+    fn from(value: PeekEventsParams) -> Self {
+        Self::PeekEventsParams(value)
+    }
+}
+impl ::std::convert::From<PeekEventsResult> for AirbusPayloadRoot {
+    fn from(value: PeekEventsResult) -> Self {
+        Self::PeekEventsResult(value)
+    }
+}
 #[doc = "`EventObject`"]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 #[serde(transparent)]
@@ -165,6 +183,91 @@ pub struct GetEventsParams {
 pub struct GetEventsResult {
     pub events: ::std::vec::Vec<EventObject>,
     pub queue: QueueName,
+}
+#[doc = "`ListQueuesResult`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct ListQueuesResult {
+    pub queues: ::std::vec::Vec<ListQueuesResultQueuesItem>,
+}
+#[doc = "`ListQueuesResultQueuesItem`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct ListQueuesResultQueuesItem {
+    pub depth: u64,
+    pub name: QueueName,
+}
+#[doc = "`PeekEventsParams`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct PeekEventsParams {
+    #[serde(default = "defaults::default_u64::<i64, 1>")]
+    pub count: i64,
+    pub queue: QueueName,
+}
+#[doc = "`PeekEventsResult`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct PeekEventsResult {
+    pub events: ::std::vec::Vec<PeekEventsResultEventsItem>,
+    pub queue: QueueName,
+}
+#[doc = "`PeekEventsResultEventsItem`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct PeekEventsResultEventsItem {
+    pub event: EventObject,
+    pub id: PeekEventsResultEventsItemId,
+}
+#[doc = "`PeekEventsResultEventsItemId`"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct PeekEventsResultEventsItemId(::std::string::String);
+impl ::std::ops::Deref for PeekEventsResultEventsItemId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<PeekEventsResultEventsItemId> for ::std::string::String {
+    fn from(value: PeekEventsResultEventsItemId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for PeekEventsResultEventsItemId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for PeekEventsResultEventsItemId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for PeekEventsResultEventsItemId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for PeekEventsResultEventsItemId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
 }
 #[doc = "`PingResult`"]
 #[derive(

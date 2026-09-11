@@ -2,7 +2,7 @@
 name = "airbus"
 version = "0.1.0"
 edition = "2021"
-description = "JSON-RPC over TCP binary with in-process event queues"
+description = "JSON-RPC over TCP (optional HTTP UI) with in-process event queues"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

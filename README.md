@@ -6,9 +6,10 @@ Rust binary plus a Python test client.
 airbus/
   schema/              # payload SOT (JSON Schema + OpenRPC catalog)
   scripts/             # codegen (generate_payloads.py)
+  resources/ui/        # static debug UI (served via --http --resources)
   src/
     app/               # application: methods + composition root (main.rs)
-    io/                # sockets, byte serve loop, RpcServer adapter
+    io/                # sockets, HTTP, byte serve loop, RpcServer adapter
     proto/             # JSON-RPC documents + generated payload types
     runtime/           # work queue, UUIDv7
   tests/               # Rust unit tests (in-process, no TCP)
@@ -25,12 +26,12 @@ Layers are composed, not subclassed. `AppService` has no TCP or JSON-RPC types;
 | Layer | Path | Role |
 | ----- | ---- | ---- |
 | schema | `schema/` | JSON Schema payload contracts + OpenRPC method catalog |
-| io | `src/io` | sockets, `serve_tcp`; connection GC (planned) |
+| io | `src/io` | sockets, `serve_tcp`, optional HTTP static + `POST /rpc` |
 | proto | `src/proto/rpc` | JSON-RPC **documents** (envelope) — not Protocol Buffers |
 | proto | `src/proto/payloads` | generated params/result types from `schema/payloads/` |
 | runtime | `src/runtime` | work queue, UUIDv7 |
-| app | `src/app` (`AppService`) | `ping`, `add`, `post_event`, `get_events` |
-| composition | `src/main.rs` | parse `--listen`, bind methods, serve TCP |
+| app | `src/app` (`AppService`) | `ping`, `add`, `post_event`, `get_events`, `list_queues`, `peek_events` |
+| composition | `src/main.rs` | parse CLI, bind methods, serve TCP (+ optional HTTP) |
 
 `RpcServer` sits in `src/io`: it feeds request bytes into `proto` and writes the
 response bytes back. Logging (`src/io/log`) is stderr I/O.
@@ -54,9 +55,50 @@ JSON values use `serde_json::Value` where schemas leave payloads unconstrained
 (opaque event objects). Structured methods deserialize through the
 generated types.
 
+### Queue methods
+
+| Method | Behavior |
+| ------ | -------- |
+| `post_event` | Publish `{ queue, event }` → `{ id, queue }` |
+| `get_events` | **Destructive** consume `{ queue, count? }` → `{ queue, events }` |
+| `list_queues` | `{ queues: [{ name, depth }] }` |
+| `peek_events` | Non-destructive `{ queue, count? }` → `{ queue, events: [{ id, event }] }` |
+
+### HTTP debug UI
+
+Optional HTTP listener serves the static UI from disk (not embedded) and the same
+JSON-RPC methods at `POST /rpc` (browser calls JSON-RPC directly — no REST).
+
+```bash
+make run
+# TCP  127.0.0.1:9097
+# HTTP http://127.0.0.1:9098/   (UI)
+#      POST http://127.0.0.1:9098/rpc
+```
+
+```text
+airbus --listen [host:]port [--http [host:]port --resources DIR]
+```
+
+`--http` requires `--resources` (docroot; typically `resources/ui`). Root `make up`
+passes `AIRBUS_HTTP_URL` (default `127.0.0.1:9098`) and `AIRBUS_RESOURCES`.
+
+### Local playground
+
+Repo-root `_playground/` is **gitignored**. Use Python notebooks there against a live
+Airbus (TCP `AIRBUS_URL`, default `127.0.0.1:9097`):
+
+```bash
+# with make up / make -C airbus run already running
+uv run --with jupyter --with ipykernel jupyter lab _playground
+```
+
+Start from `_playground/airbus_queue.ipynb`; put throwaway event JSON under
+`_playground/payloads/`. HTTP UI remains at http://127.0.0.1:9098/.
+
 ```bash
 make                   # cargo build --release → out/airbus
-make run               # listen on 127.0.0.1:9097
+make run               # TCP + HTTP UI
 make setup             # uv sync the Python client
 make client            # start a server, ping over TCP
 make test-unit         # cargo test
@@ -69,7 +111,8 @@ Integration tests spawn `out/airbus` and speak JSON-RPC over TCP.
 
 The client locates the binary from `AIRBUS_BIN`, or falls back to `out/airbus`.
 
-- `--listen [host:]port`: TCP server (required). Use port `0` for an ephemeral port.
+- `--listen [host:]port`: TCP JSON-RPC (required). Use port `0` for an ephemeral port.
   The bound address is logged as `listening on 127.0.0.1:PORT`.
+- `--http [host:]port` + `--resources DIR`: HTTP static UI + `POST /rpc`.
 
 Each TCP connection is one JSON-RPC document: client writes, half-closes, reads the response.

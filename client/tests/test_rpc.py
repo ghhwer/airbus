@@ -3,7 +3,7 @@
 import re
 import uuid
 
-from airbus_client.payloads import GetEventsParams, PostEventParams
+from airbus_client.payloads import GetEventsParams, PeekEventsParams, PostEventParams
 from airbus_client.rpc import RpcClient
 
 UUID_V7 = re.compile(
@@ -120,4 +120,41 @@ def test_post_event_invalid_params(rpc: RpcClient) -> None:
 
 def test_get_events_invalid_params(rpc: RpcClient) -> None:
     response = rpc.call("get_events", params={})
+    assert response["error"]["code"] == -32602
+
+
+def test_list_and_peek_events(rpc: RpcClient) -> None:
+    queue = f"jobs-{uuid.uuid4()}"
+    other = f"other-{uuid.uuid4()}"
+    event = {"type": "hello", "n": 1}
+    posted = rpc.post_event(PostEventParams(queue=queue, event=event))
+    rpc.post_event(PostEventParams(queue=queue, event={"n": 2}))
+    rpc.post_event(PostEventParams(queue=other, event={"x": True}))
+
+    listed = rpc.list_queues()
+    by_name = {item.name: item.depth for item in listed.queues}
+    assert by_name[queue] == 2
+    assert by_name[other] == 1
+
+    peeked = rpc.peek_events(PeekEventsParams(queue=queue, count=10))
+    assert peeked.queue == queue
+    assert len(peeked.events) == 2
+    assert {item.id for item in peeked.events} >= {posted.id}
+    assert {item.event.get("n") for item in peeked.events} == {1, 2}
+    assert next(item.event for item in peeked.events if item.id == posted.id) == event
+
+    # peek does not consume
+    again = rpc.peek_events(PeekEventsParams(queue=queue, count=10))
+    assert len(again.events) == 2
+
+
+def test_peek_events_empty_queue(rpc: RpcClient) -> None:
+    queue = f"missing-{uuid.uuid4()}"
+    peeked = rpc.peek_events(PeekEventsParams(queue=queue))
+    assert peeked.queue == queue
+    assert peeked.events == []
+
+
+def test_peek_events_invalid_params(rpc: RpcClient) -> None:
+    response = rpc.call("peek_events", params={})
     assert response["error"]["code"] == -32602

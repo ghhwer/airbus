@@ -2,7 +2,7 @@ use airbus::app::{decode_params, event_object, queue_name, AppService, InvalidPa
 use airbus::bind_app_service;
 use airbus::io::rpc_server::RpcServer;
 use airbus::io::server::parse_listen;
-use airbus::proto::payloads::{AddParams, GetEventsParams, PostEventParams};
+use airbus::proto::payloads::{AddParams, GetEventsParams, PeekEventsParams, PostEventParams};
 use airbus::proto::rpc::{self, Error, Server, INVALID_PARAMS, INVALID_REQUEST, METHOD_NOT_FOUND, PARSE_ERROR};
 use airbus::runtime::generate_uuidv7;
 use airbus::runtime::queue::QueueManager;
@@ -131,6 +131,14 @@ fn get_params(queue: &str, count: Option<i64>) -> GetEventsParams {
     decode_params(&value).unwrap()
 }
 
+fn peek_params(queue: &str, count: Option<i64>) -> PeekEventsParams {
+    let mut value = json!({ "queue": queue });
+    if let Some(c) = count {
+        value["count"] = json!(c);
+    }
+    decode_params(&value).unwrap()
+}
+
 #[test]
 fn service_ping() {
     let app = AppService::new();
@@ -226,6 +234,59 @@ fn service_get_events_invalid_params() {
 }
 
 #[test]
+fn service_list_queues_empty() {
+    let app = AppService::new();
+    assert!(app.list_queues().queues.is_empty());
+}
+
+#[test]
+fn service_list_and_peek_events() {
+    let app = AppService::new();
+    let posted = app
+        .post_event(post_params("jobs", json!({"n": 1})))
+        .unwrap();
+    app.post_event(post_params("jobs", json!({"n": 2})))
+        .unwrap();
+    app.post_event(post_params("other", json!({"x": true})))
+        .unwrap();
+
+    let listed = app.list_queues();
+    assert_eq!(listed.queues.len(), 2);
+    assert_eq!(listed.queues[0].name.as_str(), "jobs");
+    assert_eq!(listed.queues[0].depth, 2);
+    assert_eq!(listed.queues[1].name.as_str(), "other");
+    assert_eq!(listed.queues[1].depth, 1);
+
+    let peeked = app.peek_events(peek_params("jobs", Some(10))).unwrap();
+    assert_eq!(peeked.events.len(), 2);
+    let ids: Vec<&str> = peeked.events.iter().map(|e| e.id.as_str()).collect();
+    assert!(ids.contains(&posted.id.as_str()));
+    let ns: std::collections::BTreeSet<i64> = peeked
+        .events
+        .iter()
+        .filter_map(|e| e.event.0.get("n").and_then(|v| v.as_i64()))
+        .collect();
+    assert_eq!(ns, [1, 2].into());
+
+    // peek is non-destructive
+    assert_eq!(app.list_queues().queues[0].depth, 2);
+    assert_eq!(app.peek_events(peek_params("jobs", None)).unwrap().events.len(), 1);
+}
+
+#[test]
+fn service_peek_events_missing_queue_is_empty() {
+    let app = AppService::new();
+    let peeked = app.peek_events(peek_params("missing", None)).unwrap();
+    assert!(peeked.events.is_empty());
+}
+
+#[test]
+fn service_peek_events_invalid_params() {
+    assert!(decode_params::<PeekEventsParams>(&Value::Null).is_err());
+    assert!(decode_params::<PeekEventsParams>(&json!({})).is_err());
+}
+
+#[test]
 fn service_queues_are_isolated() {
     let app = AppService::new();
     app.post_event(post_params("a", json!({"from": "a"})))
@@ -271,6 +332,27 @@ fn queue_manager_isolates_queues() {
 fn queue_manager_missing_queue_is_empty() {
     let manager = QueueManager::new();
     assert!(manager.consume("missing", 1).is_empty());
+}
+
+#[test]
+fn queue_manager_list_and_peek() {
+    let manager = QueueManager::new();
+    let id = generate_uuidv7();
+    manager.publish("jobs", id, json!({"n": 1})).unwrap();
+    manager
+        .publish("jobs", generate_uuidv7(), json!({"n": 2}))
+        .unwrap();
+    manager
+        .publish("other", generate_uuidv7(), json!(true))
+        .unwrap();
+
+    let listed = manager.list();
+    assert_eq!(listed, vec![("jobs".into(), 2), ("other".into(), 1)]);
+
+    let peeked = manager.peek("jobs", 10);
+    assert_eq!(peeked.len(), 2);
+    assert!(peeked.iter().any(|(eid, value)| *eid == id && *value == json!({"n": 1})));
+    assert_eq!(manager.list(), vec![("jobs".into(), 2), ("other".into(), 1)]);
 }
 
 #[test]
@@ -323,3 +405,42 @@ fn io_rpc_server_notification_empty() {
         .on_bytes(br#"{"jsonrpc":"2.0","method":"ping"}"#)
         .is_empty());
 }
+
+#[test]
+fn http_rpc_ping_and_static() {
+    use airbus::io::http_server::{handle_request_for_test, safe_join};
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!("airbus-http-ui-{stamp}"));
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join("index.html"), b"<html>ok</html>").unwrap();
+    let resources = fs::canonicalize(&dir).unwrap();
+
+    let mut server = RpcServer::new();
+    bind_app_service(&mut server, Arc::new(AppService::new()));
+
+    let rpc = handle_request_for_test(
+        "POST",
+        "/rpc",
+        br#"{"jsonrpc":"2.0","method":"ping","id":1}"#,
+        &resources,
+        |bytes| server.on_bytes(bytes),
+    );
+    let rpc_text = String::from_utf8_lossy(&rpc);
+    assert!(rpc_text.contains("HTTP/1.1 200"));
+    assert!(rpc_text.contains("\"result\":\"pong\""));
+
+    let page = handle_request_for_test("GET", "/", b"", &resources, |_| String::new());
+    let page_text = String::from_utf8_lossy(&page);
+    assert!(page_text.contains("HTTP/1.1 200"));
+    assert!(page_text.contains("<html>ok</html>"));
+
+    assert!(safe_join(&resources, "../etc/passwd").is_none());
+    let _ = fs::remove_dir_all(&dir);
+}
+

@@ -11,11 +11,16 @@ from typing import Any, Generic, TypeVar
 from airbus_client.payloads import (
     AddParams,
     AddResult,
+    Event,
     GetEventsParams,
     GetEventsResult,
+    ListQueuesResult,
+    PeekEventsParams,
+    PeekEventsResult,
     PingResult,
     PostEventParams,
     PostEventResult,
+    Queue,
 )
 
 T = TypeVar("T")
@@ -35,7 +40,28 @@ def _from_get_events_result(data: dict[str, Any]) -> GetEventsResult:
     return GetEventsResult(queue=data["queue"], events=list(data["events"]))
 
 
+def _from_list_queues_result(data: dict[str, Any]) -> ListQueuesResult:
+    queues = [
+        Queue(name=item["name"], depth=int(item["depth"])) for item in data["queues"]
+    ]
+    return ListQueuesResult(queues=queues)
+
+
+def _from_peek_events_result(data: dict[str, Any]) -> PeekEventsResult:
+    events = [
+        Event(id=item["id"], event=dict(item["event"])) for item in data["events"]
+    ]
+    return PeekEventsResult(queue=data["queue"], events=events)
+
+
 def _get_events_wire_params(params: GetEventsParams) -> dict[str, Any]:
+    payload: dict[str, Any] = {"queue": params.queue}
+    if params.count is not None:
+        payload["count"] = params.count
+    return payload
+
+
+def _peek_events_wire_params(params: PeekEventsParams) -> dict[str, Any]:
     payload: dict[str, Any] = {"queue": params.queue}
     if params.count is not None:
         payload["count"] = params.count
@@ -261,6 +287,18 @@ class RpcClient:
             "get_events",
             _get_events_wire_params(params),
             _from_get_events_result,
+        )
+
+    def list_queues(self) -> ListQueuesResult | Pending[ListQueuesResult]:
+        return self._invoke("list_queues", None, _from_list_queues_result)
+
+    def peek_events(
+        self, params: PeekEventsParams
+    ) -> PeekEventsResult | Pending[PeekEventsResult]:
+        return self._invoke(
+            "peek_events",
+            _peek_events_wire_params(params),
+            _from_peek_events_result,
         )
 
     def _invoke(

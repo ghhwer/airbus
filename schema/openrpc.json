@@ -76,6 +76,37 @@
           "$ref": "payloads/get_events_result.schema.json"
         }
       }
+    },
+    {
+      "name": "list_queues",
+      "summary": "List named queues and their depths",
+      "params": [],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "payloads/list_queues_result.schema.json"
+        }
+      }
+    },
+    {
+      "name": "peek_events",
+      "summary": "Peek events on a named queue without consuming them",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": true,
+          "schema": {
+            "$ref": "payloads/peek_events_params.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "payloads/peek_events_result.schema.json"
+        }
+      }
     }
   ]
 }

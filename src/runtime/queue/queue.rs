@@ -24,6 +24,23 @@ impl Queue {
         Ok(())
     }
 
+    pub fn depth(&self) -> usize {
+        self.events.len()
+    }
+
+    pub fn peek(&self, event_count: i64) -> Vec<(UuidV7, Value)> {
+        let n = if event_count < 0 {
+            0
+        } else {
+            event_count as usize
+        };
+        self.events
+            .iter()
+            .take(n)
+            .map(|(&id, value)| (id, value.clone()))
+            .collect()
+    }
+
     pub fn consume(&mut self, event_count: i64) -> Vec<Value> {
         let n = if event_count < 0 {
             0

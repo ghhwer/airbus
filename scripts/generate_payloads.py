@@ -23,6 +23,9 @@ PAYLOAD_FILES = [
     "post_event_result.schema.json",
     "get_events_params.schema.json",
     "get_events_result.schema.json",
+    "list_queues_result.schema.json",
+    "peek_events_params.schema.json",
+    "peek_events_result.schema.json",
 ]
 
 
