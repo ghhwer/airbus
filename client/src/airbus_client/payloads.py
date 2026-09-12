@@ -4,10 +4,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
+
 
 type PingResult = str
 type AddResult = float
+
+class QueueMode(StrEnum):
+    broadcast = 'broadcast'
+    worker = 'worker'
+
+
+class DispatchStrategy(StrEnum):
+    round_robin = 'round_robin'
+
 
 type AddParams = list[float]
 
@@ -40,6 +51,8 @@ class GetEventsResult:
 class Queue:
     name: str
     depth: int
+    mode: QueueMode
+    listener_count: int
 
 
 @dataclass
@@ -63,3 +76,72 @@ class Event:
 class PeekEventsResult:
     queue: str
     events: list[Event]
+
+
+@dataclass
+class CreateQueueParams:
+    queue: str
+    mode: QueueMode | None = None
+    dispatch_strategy: DispatchStrategy | None = None
+
+
+@dataclass
+class CreateQueueResult:
+    queue: str
+    mode: QueueMode
+    created: bool
+
+
+@dataclass
+class AttachListenerParams:
+    queue: str
+    port: int
+    host: str | None = None
+    exhaustion_timeout_ms: int | None = None
+    max_retries: int | None = None
+
+
+@dataclass
+class AttachListenerResult:
+    listener_id: str
+    queue: str
+    status: str
+
+
+@dataclass
+class DetachListenerParams:
+    listener_id: str
+
+
+@dataclass
+class DetachListenerResult:
+    listener_id: str
+    detached: bool
+
+
+@dataclass
+class ListListenersParams:
+    queue: str | None = None
+
+
+@dataclass
+class Listener:
+    id: str
+    queue: str
+    host: str
+    port: int
+    mode: QueueMode
+    failure_count: int
+    active: bool
+
+
+@dataclass
+class ListListenersResult:
+    listeners: list[Listener]
+
+
+@dataclass
+class ListenerEventParams:
+    queue: str
+    id: str
+    event: dict[str, Any]

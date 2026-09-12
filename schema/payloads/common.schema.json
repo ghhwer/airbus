@@ -12,6 +12,16 @@
       "title": "EventObject",
       "type": "object",
       "additionalProperties": true
+    },
+    "QueueMode": {
+      "title": "QueueMode",
+      "type": "string",
+      "enum": ["broadcast", "worker"]
+    },
+    "DispatchStrategy": {
+      "title": "DispatchStrategy",
+      "type": "string",
+      "enum": ["round_robin"]
     }
   }
 }

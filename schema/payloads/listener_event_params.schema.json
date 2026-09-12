@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://airbus.local/schema/payloads/listener_event_params.schema.json",
+  "title": "ListenerEventParams",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["queue", "id", "event"],
+  "properties": {
+    "queue": {
+      "$ref": "common.schema.json#/$defs/QueueName"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event": {
+      "$ref": "common.schema.json#/$defs/EventObject"
+    }
+  }
+}

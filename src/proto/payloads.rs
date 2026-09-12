@@ -74,6 +74,8 @@ impl ::std::convert::TryFrom<String> for AddResult {
 pub enum AirbusPayloadRoot {
     QueueName(QueueName),
     EventObject(EventObject),
+    QueueMode(QueueMode),
+    DispatchStrategy(DispatchStrategy),
     PingResult(PingResult),
     AddParams(AddParams),
     AddResult(AddResult),
@@ -84,6 +86,15 @@ pub enum AirbusPayloadRoot {
     ListQueuesResult(ListQueuesResult),
     PeekEventsParams(PeekEventsParams),
     PeekEventsResult(PeekEventsResult),
+    CreateQueueParams(CreateQueueParams),
+    CreateQueueResult(CreateQueueResult),
+    AttachListenerParams(AttachListenerParams),
+    AttachListenerResult(AttachListenerResult),
+    DetachListenerParams(DetachListenerParams),
+    DetachListenerResult(DetachListenerResult),
+    ListListenersParams(ListListenersParams),
+    ListListenersResult(ListListenersResult),
+    ListenerEventParams(ListenerEventParams),
 }
 impl ::std::convert::From<QueueName> for AirbusPayloadRoot {
     fn from(value: QueueName) -> Self {
@@ -93,6 +104,16 @@ impl ::std::convert::From<QueueName> for AirbusPayloadRoot {
 impl ::std::convert::From<EventObject> for AirbusPayloadRoot {
     fn from(value: EventObject) -> Self {
         Self::EventObject(value)
+    }
+}
+impl ::std::convert::From<QueueMode> for AirbusPayloadRoot {
+    fn from(value: QueueMode) -> Self {
+        Self::QueueMode(value)
+    }
+}
+impl ::std::convert::From<DispatchStrategy> for AirbusPayloadRoot {
+    fn from(value: DispatchStrategy) -> Self {
+        Self::DispatchStrategy(value)
     }
 }
 impl ::std::convert::From<PingResult> for AirbusPayloadRoot {
@@ -145,6 +166,300 @@ impl ::std::convert::From<PeekEventsResult> for AirbusPayloadRoot {
         Self::PeekEventsResult(value)
     }
 }
+impl ::std::convert::From<CreateQueueParams> for AirbusPayloadRoot {
+    fn from(value: CreateQueueParams) -> Self {
+        Self::CreateQueueParams(value)
+    }
+}
+impl ::std::convert::From<CreateQueueResult> for AirbusPayloadRoot {
+    fn from(value: CreateQueueResult) -> Self {
+        Self::CreateQueueResult(value)
+    }
+}
+impl ::std::convert::From<AttachListenerParams> for AirbusPayloadRoot {
+    fn from(value: AttachListenerParams) -> Self {
+        Self::AttachListenerParams(value)
+    }
+}
+impl ::std::convert::From<AttachListenerResult> for AirbusPayloadRoot {
+    fn from(value: AttachListenerResult) -> Self {
+        Self::AttachListenerResult(value)
+    }
+}
+impl ::std::convert::From<DetachListenerParams> for AirbusPayloadRoot {
+    fn from(value: DetachListenerParams) -> Self {
+        Self::DetachListenerParams(value)
+    }
+}
+impl ::std::convert::From<DetachListenerResult> for AirbusPayloadRoot {
+    fn from(value: DetachListenerResult) -> Self {
+        Self::DetachListenerResult(value)
+    }
+}
+impl ::std::convert::From<ListListenersParams> for AirbusPayloadRoot {
+    fn from(value: ListListenersParams) -> Self {
+        Self::ListListenersParams(value)
+    }
+}
+impl ::std::convert::From<ListListenersResult> for AirbusPayloadRoot {
+    fn from(value: ListListenersResult) -> Self {
+        Self::ListListenersResult(value)
+    }
+}
+impl ::std::convert::From<ListenerEventParams> for AirbusPayloadRoot {
+    fn from(value: ListenerEventParams) -> Self {
+        Self::ListenerEventParams(value)
+    }
+}
+#[doc = "`AttachListenerParams`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct AttachListenerParams {
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub exhaustion_timeout_ms: ::std::option::Option<u64>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub host: ::std::option::Option<::std::string::String>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub max_retries: ::std::option::Option<u64>,
+    pub port: ::std::num::NonZeroU64,
+    pub queue: QueueName,
+}
+#[doc = "`AttachListenerResult`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct AttachListenerResult {
+    pub listener_id: AttachListenerResultListenerId,
+    pub queue: QueueName,
+    pub status: ::std::string::String,
+}
+#[doc = "`AttachListenerResultListenerId`"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct AttachListenerResultListenerId(::std::string::String);
+impl ::std::ops::Deref for AttachListenerResultListenerId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<AttachListenerResultListenerId> for ::std::string::String {
+    fn from(value: AttachListenerResultListenerId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for AttachListenerResultListenerId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for AttachListenerResultListenerId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for AttachListenerResultListenerId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for AttachListenerResultListenerId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`CreateQueueParams`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct CreateQueueParams {
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub dispatch_strategy: ::std::option::Option<DispatchStrategy>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub mode: ::std::option::Option<QueueMode>,
+    pub queue: QueueName,
+}
+#[doc = "`CreateQueueResult`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct CreateQueueResult {
+    pub created: bool,
+    pub mode: QueueMode,
+    pub queue: QueueName,
+}
+#[doc = "`DetachListenerParams`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct DetachListenerParams {
+    pub listener_id: DetachListenerParamsListenerId,
+}
+#[doc = "`DetachListenerParamsListenerId`"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct DetachListenerParamsListenerId(::std::string::String);
+impl ::std::ops::Deref for DetachListenerParamsListenerId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<DetachListenerParamsListenerId> for ::std::string::String {
+    fn from(value: DetachListenerParamsListenerId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for DetachListenerParamsListenerId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for DetachListenerParamsListenerId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for DetachListenerParamsListenerId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for DetachListenerParamsListenerId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`DetachListenerResult`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct DetachListenerResult {
+    pub detached: bool,
+    pub listener_id: DetachListenerResultListenerId,
+}
+#[doc = "`DetachListenerResultListenerId`"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct DetachListenerResultListenerId(::std::string::String);
+impl ::std::ops::Deref for DetachListenerResultListenerId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<DetachListenerResultListenerId> for ::std::string::String {
+    fn from(value: DetachListenerResultListenerId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for DetachListenerResultListenerId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for DetachListenerResultListenerId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for DetachListenerResultListenerId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for DetachListenerResultListenerId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`DispatchStrategy`"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum DispatchStrategy {
+    #[serde(rename = "round_robin")]
+    RoundRobin,
+}
+impl ::std::fmt::Display for DispatchStrategy {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::RoundRobin => f.write_str("round_robin"),
+        }
+    }
+}
+impl ::std::str::FromStr for DispatchStrategy {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "round_robin" => Ok(Self::RoundRobin),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for DispatchStrategy {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for DispatchStrategy {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
 #[doc = "`EventObject`"]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 #[serde(transparent)]
@@ -184,6 +499,81 @@ pub struct GetEventsResult {
     pub events: ::std::vec::Vec<EventObject>,
     pub queue: QueueName,
 }
+#[doc = "`ListListenersParams`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct ListListenersParams {
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub queue: ::std::option::Option<QueueName>,
+}
+#[doc = "`ListListenersResult`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct ListListenersResult {
+    pub listeners: ::std::vec::Vec<ListListenersResultListenersItem>,
+}
+#[doc = "`ListListenersResultListenersItem`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct ListListenersResultListenersItem {
+    pub active: bool,
+    pub failure_count: u64,
+    pub host: ::std::string::String,
+    pub id: ListListenersResultListenersItemId,
+    pub mode: QueueMode,
+    pub port: ::std::num::NonZeroU64,
+    pub queue: QueueName,
+}
+#[doc = "`ListListenersResultListenersItemId`"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct ListListenersResultListenersItemId(::std::string::String);
+impl ::std::ops::Deref for ListListenersResultListenersItemId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<ListListenersResultListenersItemId> for ::std::string::String {
+    fn from(value: ListListenersResultListenersItemId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for ListListenersResultListenersItemId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for ListListenersResultListenersItemId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ListListenersResultListenersItemId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for ListListenersResultListenersItemId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 #[doc = "`ListQueuesResult`"]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
@@ -195,7 +585,67 @@ pub struct ListQueuesResult {
 #[serde(deny_unknown_fields)]
 pub struct ListQueuesResultQueuesItem {
     pub depth: u64,
+    pub listener_count: u64,
+    pub mode: QueueMode,
     pub name: QueueName,
+}
+#[doc = "`ListenerEventParams`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct ListenerEventParams {
+    pub event: EventObject,
+    pub id: ListenerEventParamsId,
+    pub queue: QueueName,
+}
+#[doc = "`ListenerEventParamsId`"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct ListenerEventParamsId(::std::string::String);
+impl ::std::ops::Deref for ListenerEventParamsId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<ListenerEventParamsId> for ::std::string::String {
+    fn from(value: ListenerEventParamsId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for ListenerEventParamsId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for ListenerEventParamsId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ListenerEventParamsId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for ListenerEventParamsId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
 }
 #[doc = "`PeekEventsParams`"]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
@@ -372,6 +822,57 @@ impl<'de> ::serde::Deserialize<'de> for PostEventResultId {
             .map_err(|e: self::error::ConversionError| {
                 <D::Error as ::serde::de::Error>::custom(e.to_string())
             })
+    }
+}
+#[doc = "`QueueMode`"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum QueueMode {
+    #[serde(rename = "broadcast")]
+    Broadcast,
+    #[serde(rename = "worker")]
+    Worker,
+}
+impl ::std::fmt::Display for QueueMode {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Broadcast => f.write_str("broadcast"),
+            Self::Worker => f.write_str("worker"),
+        }
+    }
+}
+impl ::std::str::FromStr for QueueMode {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "broadcast" => Ok(Self::Broadcast),
+            "worker" => Ok(Self::Worker),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for QueueMode {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for QueueMode {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
     }
 }
 #[doc = "`QueueName`"]

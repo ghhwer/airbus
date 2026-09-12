@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://airbus.local/schema/payloads/create_queue_params.schema.json",
+  "title": "CreateQueueParams",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["queue"],
+  "properties": {
+    "queue": {
+      "$ref": "common.schema.json#/$defs/QueueName"
+    },
+    "mode": {
+      "$ref": "common.schema.json#/$defs/QueueMode"
+    },
+    "dispatch_strategy": {
+      "$ref": "common.schema.json#/$defs/DispatchStrategy"
+    }
+  }
+}

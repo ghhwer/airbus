@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://airbus.local/schema/payloads/detach_listener_result.schema.json",
+  "title": "DetachListenerResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["listener_id", "detached"],
+  "properties": {
+    "listener_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "detached": {
+      "type": "boolean"
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://airbus.local/schema/payloads/list_listeners_params.schema.json",
+  "title": "ListListenersParams",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "queue": {
+      "$ref": "common.schema.json#/$defs/QueueName"
+    }
+  }
+}

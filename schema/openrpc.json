@@ -107,6 +107,86 @@
           "$ref": "payloads/peek_events_result.schema.json"
         }
       }
+    },
+    {
+      "name": "create_queue",
+      "summary": "Configure and create an event queue",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": true,
+          "schema": {
+            "$ref": "payloads/create_queue_params.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "payloads/create_queue_result.schema.json"
+        }
+      }
+    },
+    {
+      "name": "attach_listener",
+      "summary": "Attach a client-side port listener to a queue",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": true,
+          "schema": {
+            "$ref": "payloads/attach_listener_params.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "payloads/attach_listener_result.schema.json"
+        }
+      }
+    },
+    {
+      "name": "detach_listener",
+      "summary": "Detach an attached listener",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": true,
+          "schema": {
+            "$ref": "payloads/detach_listener_params.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "payloads/detach_listener_result.schema.json"
+        }
+      }
+    },
+    {
+      "name": "list_listeners",
+      "summary": "List attached listeners",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": false,
+          "schema": {
+            "$ref": "payloads/list_listeners_params.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "payloads/list_listeners_result.schema.json"
+        }
+      }
     }
   ]
 }

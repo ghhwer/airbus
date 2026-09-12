@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://airbus.local/schema/payloads/list_listeners_result.schema.json",
+  "title": "ListListenersResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["listeners"],
+  "properties": {
+    "listeners": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "queue", "host", "port", "mode", "failure_count", "active"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "queue": {
+            "$ref": "common.schema.json#/$defs/QueueName"
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "mode": {
+            "$ref": "common.schema.json#/$defs/QueueMode"
+          },
+          "failure_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

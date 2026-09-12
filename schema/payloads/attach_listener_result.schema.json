@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://airbus.local/schema/payloads/attach_listener_result.schema.json",
+  "title": "AttachListenerResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["listener_id", "queue", "status"],
+  "properties": {
+    "listener_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "queue": {
+      "$ref": "common.schema.json#/$defs/QueueName"
+    },
+    "status": {
+      "type": "string"
+    }
+  }
+}

@@ -26,6 +26,15 @@ PAYLOAD_FILES = [
     "list_queues_result.schema.json",
     "peek_events_params.schema.json",
     "peek_events_result.schema.json",
+    "create_queue_params.schema.json",
+    "create_queue_result.schema.json",
+    "attach_listener_params.schema.json",
+    "attach_listener_result.schema.json",
+    "detach_listener_params.schema.json",
+    "detach_listener_result.schema.json",
+    "list_listeners_params.schema.json",
+    "list_listeners_result.schema.json",
+    "listener_event_params.schema.json",
 ]
 
 
@@ -52,13 +61,15 @@ def rewrite_refs_rust(node: object) -> object:
 
 
 def rewrite_refs_python(node: object, common_defs: dict) -> object:
-    """Inline common $defs; strip titles from inlined EventObject so it becomes dict[str, Any]."""
+    """Inline common $defs for strings/objects; preserve shared enums."""
     if isinstance(node, dict):
         if set(node.keys()) == {"$ref"}:
             ref = node["$ref"]
             prefix = f"{COMMON_NAME}#/$defs/"
             if ref.startswith(prefix):
                 key = ref[len(prefix) :]
+                if key in ("QueueMode", "DispatchStrategy"):
+                    return {"$ref": f"#/$defs/{key}"}
                 inlined = json.loads(json.dumps(common_defs[key]))  # deep copy
                 inlined.pop("title", None)
                 return rewrite_refs_python(inlined, common_defs)
@@ -102,6 +113,11 @@ def write_python_bundle() -> Path:
     common_defs = common["$defs"]
     defs: dict = {}
     props: dict = {}
+    for enum_key in ("QueueMode", "DispatchStrategy"):
+        if enum_key in common_defs:
+            defs[enum_key] = common_defs[enum_key]
+            props[enum_key] = {"$ref": f"#/$defs/{enum_key}"}
+
     for fname in PAYLOAD_FILES:
         doc = load(fname)
         title = doc["title"]
