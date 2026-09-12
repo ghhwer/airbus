@@ -4,7 +4,7 @@ use airbus::io::rpc_server::RpcServer;
 use airbus::io::server::parse_listen;
 use airbus::proto::payloads::{
     AddParams, AttachListenerParams, CreateQueueParams, DetachListenerParams, DispatchStrategy,
-    GetEventsParams, PeekEventsParams, PostEventParams, QueueMode,
+    PeekEventsParams, PostEventParams, QueueMode,
 };
 use airbus::proto::rpc::{
     self, Error, Server, INVALID_PARAMS, INVALID_REQUEST, METHOD_NOT_FOUND, PARSE_ERROR,
@@ -106,7 +106,7 @@ fn rpc_invalid_request() {
 #[test]
 fn rpc_batch_ping_and_queue() {
     let out: Value = serde_json::from_str(&app_rpc_server().on_bytes(
-        br#"[{"jsonrpc":"2.0","method":"ping","id":1},{"jsonrpc":"2.0","method":"create_queue","params":{"queue":"batch"},"id":2},{"jsonrpc":"2.0","method":"post_event","params":{"queue":"batch","event":{"n":1}},"id":3},{"jsonrpc":"2.0","method":"get_events","params":{"queue":"batch"},"id":4}]"#,
+        br#"[{"jsonrpc":"2.0","method":"ping","id":1},{"jsonrpc":"2.0","method":"create_queue","params":{"queue":"batch"},"id":2},{"jsonrpc":"2.0","method":"post_event","params":{"queue":"batch","event":{"n":1}},"id":3},{"jsonrpc":"2.0","method":"peek_events","params":{"queue":"batch"},"id":4}]"#,
     ))
     .unwrap();
     assert!(out.is_array());
@@ -121,7 +121,21 @@ fn rpc_batch_ping_and_queue() {
     assert!(looks_like_uuidv7(out[2]["result"]["id"].as_str().unwrap()));
     assert_eq!(out[3]["id"], 4);
     assert_eq!(out[3]["result"]["queue"], "batch");
-    assert_eq!(out[3]["result"]["events"], json!([{"n": 1}]));
+    assert_eq!(out[3]["result"]["events"].as_array().unwrap().len(), 1);
+    assert_eq!(out[3]["result"]["events"][0]["event"], json!({"n": 1}));
+    assert!(looks_like_uuidv7(
+        out[3]["result"]["events"][0]["id"].as_str().unwrap()
+    ));
+}
+
+#[test]
+fn rpc_get_events_method_not_found() {
+    let out: Value = serde_json::from_str(&app_rpc_server().on_bytes(
+        br#"{"jsonrpc":"2.0","method":"get_events","params":{"queue":"jobs"},"id":1}"#,
+    ))
+    .unwrap();
+    assert_eq!(out["error"]["code"], METHOD_NOT_FOUND);
+    assert_eq!(out["id"], 1);
 }
 
 #[test]
@@ -152,14 +166,6 @@ fn post_params(queue: &str, event: Value) -> PostEventParams {
         queue: queue_name(queue).unwrap(),
         event: event_object(event).unwrap(),
     }
-}
-
-fn get_params(queue: &str, count: Option<i64>) -> GetEventsParams {
-    let mut value = json!({ "queue": queue });
-    if let Some(c) = count {
-        value["count"] = json!(c);
-    }
-    decode_params(&value).unwrap()
 }
 
 fn peek_params(queue: &str, count: Option<i64>) -> PeekEventsParams {
@@ -229,56 +235,6 @@ fn service_post_event_invalid_params() {
     assert!(decode_params::<PostEventParams>(&Value::Null).is_err());
     assert!(decode_params::<PostEventParams>(&json!({})).is_err());
     assert!(decode_params::<PostEventParams>(&json!({"queue": "jobs"})).is_err());
-}
-
-#[test]
-fn service_get_events_after_post() {
-    let app = AppService::new();
-    app.create_queue(create_params("jobs", None, None)).unwrap();
-    app.post_event(post_params("jobs", json!({"n": 1})))
-        .unwrap();
-    let got = app.get_events(get_params("jobs", None));
-    assert_eq!(got.queue.as_str(), "jobs");
-    assert_eq!(got.events.len(), 1);
-    assert_eq!(got.events[0].0.get("n"), Some(&json!(1)));
-}
-
-#[test]
-fn service_get_events_default_count_is_one() {
-    let app = AppService::new();
-    app.create_queue(create_params("jobs", None, None)).unwrap();
-    app.post_event(post_params("jobs", json!({"n": 1})))
-        .unwrap();
-    app.post_event(post_params("jobs", json!({"n": 2})))
-        .unwrap();
-    assert_eq!(app.get_events(get_params("jobs", None)).events.len(), 1);
-    assert_eq!(app.get_events(get_params("jobs", None)).events.len(), 1);
-    assert!(app.get_events(get_params("jobs", None)).events.is_empty());
-}
-
-#[test]
-fn service_get_events_respects_count() {
-    let app = AppService::new();
-    app.create_queue(create_params("jobs", None, None)).unwrap();
-    for n in 1..=3 {
-        app.post_event(post_params("jobs", json!({"n": n})))
-            .unwrap();
-    }
-    assert_eq!(app.get_events(get_params("jobs", Some(2))).events.len(), 2);
-    assert_eq!(app.get_events(get_params("jobs", Some(8))).events.len(), 1);
-}
-
-#[test]
-fn service_get_events_missing_queue_is_empty() {
-    let app = AppService::new();
-    let got = app.get_events(get_params("missing", None));
-    assert!(got.events.is_empty());
-}
-
-#[test]
-fn service_get_events_invalid_params() {
-    assert!(decode_params::<GetEventsParams>(&Value::Null).is_err());
-    assert!(decode_params::<GetEventsParams>(&json!({})).is_err());
 }
 
 #[test]
@@ -357,25 +313,12 @@ fn service_queues_are_isolated() {
         .unwrap();
     app.post_event(post_params("b", json!({"from": "b"})))
         .unwrap();
-    let from_a = app.get_events(get_params("a", None));
+    let from_a = app.peek_events(peek_params("a", None)).unwrap();
     assert_eq!(from_a.events.len(), 1);
-    assert_eq!(from_a.events[0].0.get("from"), Some(&json!("a")));
-    let from_b = app.get_events(get_params("b", None));
+    assert_eq!(from_a.events[0].event.0.get("from"), Some(&json!("a")));
+    let from_b = app.peek_events(peek_params("b", None)).unwrap();
     assert_eq!(from_b.events.len(), 1);
-    assert_eq!(from_b.events[0].0.get("from"), Some(&json!("b")));
-}
-
-#[test]
-fn queue_manager_publish_consume() {
-    let manager = QueueManager::new();
-    manager
-        .create_queue("jobs", QueueMode::Broadcast, DispatchStrategy::RoundRobin)
-        .unwrap();
-    let id = generate_uuidv7();
-    manager.publish("jobs", id, json!("hello")).unwrap();
-    let events = manager.consume("jobs", 1);
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0], "hello");
+    assert_eq!(from_b.events[0].event.0.get("from"), Some(&json!("b")));
 }
 
 #[test]
@@ -389,18 +332,12 @@ fn queue_manager_isolates_queues() {
         .unwrap();
     manager.publish("a", generate_uuidv7(), json!(1)).unwrap();
     manager.publish("b", generate_uuidv7(), json!(2)).unwrap();
-    let from_a = manager.consume("a", 8);
+    let from_a = manager.peek("a", 8);
     assert_eq!(from_a.len(), 1);
-    assert_eq!(from_a[0], 1);
-    let from_b = manager.consume("b", 8);
+    assert_eq!(from_a[0].1, 1);
+    let from_b = manager.peek("b", 8);
     assert_eq!(from_b.len(), 1);
-    assert_eq!(from_b[0], 2);
-}
-
-#[test]
-fn queue_manager_missing_queue_is_empty() {
-    let manager = QueueManager::new();
-    assert!(manager.consume("missing", 1).is_empty());
+    assert_eq!(from_b[0].1, 2);
 }
 
 #[test]
@@ -444,19 +381,6 @@ fn queue_manager_list_and_peek() {
             ("other".into(), 1, QueueMode::Broadcast, 0)
         ]
     );
-}
-
-#[test]
-fn queue_manager_consume_removes_payload() {
-    let manager = QueueManager::new();
-    manager
-        .create_queue("jobs", QueueMode::Broadcast, DispatchStrategy::RoundRobin)
-        .unwrap();
-    manager
-        .publish("jobs", generate_uuidv7(), json!("x"))
-        .unwrap();
-    assert_eq!(manager.consume("jobs", 1).len(), 1);
-    assert!(manager.consume("jobs", 1).is_empty());
 }
 
 #[test]

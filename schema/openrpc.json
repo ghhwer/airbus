@@ -66,26 +66,6 @@
       }
     },
     {
-      "name": "get_events",
-      "summary": "Consume events from a named queue",
-      "paramStructure": "by-name",
-      "params": [
-        {
-          "name": "params",
-          "required": true,
-          "schema": {
-            "$ref": "payloads/get_events_params.schema.json"
-          }
-        }
-      ],
-      "result": {
-        "name": "result",
-        "schema": {
-          "$ref": "payloads/get_events_result.schema.json"
-        }
-      }
-    },
-    {
       "name": "list_queues",
       "summary": "List named queues and their depths",
       "params": [],

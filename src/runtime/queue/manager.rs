@@ -80,17 +80,6 @@ impl QueueManager {
         Ok(())
     }
 
-    pub fn consume(&self, queue_name: &str, event_count: i64) -> Vec<Value> {
-        let Ok(queue) = self.find_queue(queue_name) else {
-            return Vec::new();
-        };
-        let result = match queue.lock() {
-            Ok(mut q) => q.consume(event_count),
-            Err(_) => Vec::new(),
-        };
-        result
-    }
-
     pub fn list(&self) -> Vec<(String, usize, QueueMode, usize)> {
         let map = match self.queues.lock() {
             Ok(m) => m,

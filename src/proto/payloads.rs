@@ -81,8 +81,6 @@ pub enum AirbusPayloadRoot {
     AddResult(AddResult),
     PostEventParams(PostEventParams),
     PostEventResult(PostEventResult),
-    GetEventsParams(GetEventsParams),
-    GetEventsResult(GetEventsResult),
     ListQueuesResult(ListQueuesResult),
     PeekEventsParams(PeekEventsParams),
     PeekEventsResult(PeekEventsResult),
@@ -140,16 +138,6 @@ impl ::std::convert::From<PostEventParams> for AirbusPayloadRoot {
 impl ::std::convert::From<PostEventResult> for AirbusPayloadRoot {
     fn from(value: PostEventResult) -> Self {
         Self::PostEventResult(value)
-    }
-}
-impl ::std::convert::From<GetEventsParams> for AirbusPayloadRoot {
-    fn from(value: GetEventsParams) -> Self {
-        Self::GetEventsParams(value)
-    }
-}
-impl ::std::convert::From<GetEventsResult> for AirbusPayloadRoot {
-    fn from(value: GetEventsResult) -> Self {
-        Self::GetEventsResult(value)
     }
 }
 impl ::std::convert::From<ListQueuesResult> for AirbusPayloadRoot {
@@ -489,21 +477,6 @@ impl ::std::convert::From<::serde_json::Map<::std::string::String, ::serde_json:
     fn from(value: ::serde_json::Map<::std::string::String, ::serde_json::Value>) -> Self {
         Self(value)
     }
-}
-#[doc = "`GetEventsParams`"]
-#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct GetEventsParams {
-    #[serde(default = "defaults::default_u64::<i64, 1>")]
-    pub count: i64,
-    pub queue: QueueName,
-}
-#[doc = "`GetEventsResult`"]
-#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct GetEventsResult {
-    pub events: ::std::vec::Vec<EventObject>,
-    pub queue: QueueName,
 }
 #[doc = "`ListListenersParams`"]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug, Default)]

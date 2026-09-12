@@ -210,15 +210,6 @@ async function enqueueJson() {
   await refresh(true);
 }
 
-async function dequeue() {
-  const queue = queueNameEl.value.trim() || selectedQueue;
-  if (!queue) return;
-  const count = Number(document.getElementById("get-count").value) || 1;
-  selectQueue(queue);
-  await rpc("get_events", { queue, count });
-  await refresh(true);
-}
-
 document.getElementById("post-btn").addEventListener("click", () => {
   enqueueSimple().catch((e) => {
     setLive(false, "error");
@@ -227,12 +218,6 @@ document.getElementById("post-btn").addEventListener("click", () => {
 });
 document.getElementById("post-json-btn").addEventListener("click", () => {
   enqueueJson().catch((e) => {
-    setLive(false, "error");
-    totalsEl.textContent = e.message;
-  });
-});
-document.getElementById("get-btn").addEventListener("click", () => {
-  dequeue().catch((e) => {
     setLive(false, "error");
     totalsEl.textContent = e.message;
   });

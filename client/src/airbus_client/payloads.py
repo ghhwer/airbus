@@ -35,18 +35,6 @@ class PostEventResult:
 
 
 @dataclass
-class GetEventsParams:
-    queue: str
-    count: int | None = 1
-
-
-@dataclass
-class GetEventsResult:
-    queue: str
-    events: list[dict[str, Any]]
-
-
-@dataclass
 class Queue:
     name: str
     depth: int

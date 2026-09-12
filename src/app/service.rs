@@ -2,7 +2,7 @@ use crate::proto::payloads::{
     AddParams, AddResult, AttachListenerParams, AttachListenerResult,
     AttachListenerResultListenerId, CreateQueueParams, CreateQueueResult, DetachListenerParams,
     DetachListenerResult, DetachListenerResultListenerId, DispatchStrategy, EventObject,
-    GetEventsParams, GetEventsResult, ListListenersParams, ListListenersResult,
+    ListListenersParams, ListListenersResult,
     ListListenersResultListenersItem, ListListenersResultListenersItemId, ListQueuesResult,
     ListQueuesResultQueuesItem, PeekEventsParams, PeekEventsResult, PeekEventsResultEventsItem,
     PeekEventsResultEventsItemId, PingResult, PostEventParams, PostEventResult, PostEventResultId,
@@ -99,19 +99,6 @@ impl AppService {
                 .map_err(|e| InvalidParams::new(e.to_string()))?,
             queue: params.queue,
         })
-    }
-
-    pub fn get_events(&self, params: GetEventsParams) -> GetEventsResult {
-        let events = self
-            .queue_manager
-            .consume(params.queue.as_str(), params.count)
-            .into_iter()
-            .map(value_as_event_object)
-            .collect();
-        GetEventsResult {
-            queue: params.queue,
-            events,
-        }
     }
 
     pub fn list_queues(&self) -> ListQueuesResult {

@@ -19,8 +19,6 @@ from airbus_client.payloads import (
     CreateQueueResult,
     DetachListenerParams,
     DetachListenerResult,
-    GetEventsParams,
-    GetEventsResult,
     ListListenersParams,
     ListListenersResult,
     ListQueuesResult,
@@ -324,13 +322,6 @@ class RpcClient:
     def post_event(self, params: PostEventParams) -> PostEventResult | Pending[PostEventResult]:
         return self._invoke(
             "post_event", params, partial(proto.decode_result, "post_event", PostEventResult)
-        )
-
-    def get_events(self, params: GetEventsParams) -> GetEventsResult | Pending[GetEventsResult]:
-        return self._invoke(
-            "get_events",
-            params,
-            partial(proto.decode_result, "get_events", GetEventsResult),
         )
 
     def list_queues(self) -> ListQueuesResult | Pending[ListQueuesResult]:

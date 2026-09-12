@@ -10,7 +10,6 @@ import pytest
 from airbus_client.payloads import (
     AttachListenerParams,
     CreateQueueParams,
-    GetEventsParams,
     ListListenersParams,
     PeekEventsParams,
     PostEventParams,
@@ -71,64 +70,22 @@ def test_batch_ping_and_queue(rpc: RpcClient) -> None:
         rpc.notify("ping")
         created = rpc.create_queue(CreateQueueParams(queue=queue))
         posted = rpc.post_event(PostEventParams(queue=queue, event=event))
-        got = rpc.get_events(GetEventsParams(queue=queue))
+        peeked = rpc.peek_events(PeekEventsParams(queue=queue))
 
     assert pong.result == "pong"
     assert created.result.queue == queue
     assert created.result.created is True
     assert posted.result.queue == queue
     assert UUID_V7.match(posted.result.id)
-    assert got.result.queue == queue
-    assert got.result.events == [event]
+    assert peeked.result.queue == queue
+    assert len(peeked.result.events) == 1
+    assert peeked.result.events[0].event == event
+    assert UUID_V7.match(peeked.result.events[0].id)
 
 
-def test_post_and_get_event(rpc: RpcClient) -> None:
-    queue = f"jobs-{uuid.uuid4()}"
-    rpc.create_queue(CreateQueueParams(queue=queue))
-    event = {"type": "hello", "n": 1}
-    posted = rpc.post_event(PostEventParams(queue=queue, event=event))
-    assert posted.queue == queue
-    assert UUID_V7.match(posted.id)
-
-    got = rpc.get_events(GetEventsParams(queue=queue))
-    assert got.queue == queue
-    assert got.events == [event]
-
-
-def test_get_events_empty_queue(rpc: RpcClient) -> None:
-    queue = f"missing-{uuid.uuid4()}"
-    got = rpc.get_events(GetEventsParams(queue=queue))
-    assert got.queue == queue
-    assert got.events == []
-
-
-def test_get_events_default_count_is_one(rpc: RpcClient) -> None:
-    queue = f"jobs-{uuid.uuid4()}"
-    rpc.create_queue(CreateQueueParams(queue=queue))
-    rpc.post_event(PostEventParams(queue=queue, event={"n": 1}))
-    rpc.post_event(PostEventParams(queue=queue, event={"n": 2}))
-
-    first = rpc.get_events(GetEventsParams(queue=queue))
-    assert len(first.events) == 1
-
-    second = rpc.get_events(GetEventsParams(queue=queue))
-    assert len(second.events) == 1
-
-    empty = rpc.get_events(GetEventsParams(queue=queue))
-    assert empty.events == []
-
-
-def test_get_events_respects_count(rpc: RpcClient) -> None:
-    queue = f"jobs-{uuid.uuid4()}"
-    rpc.create_queue(CreateQueueParams(queue=queue))
-    for n in (1, 2, 3):
-        rpc.post_event(PostEventParams(queue=queue, event={"n": n}))
-
-    got = rpc.get_events(GetEventsParams(queue=queue, count=2))
-    assert len(got.events) == 2
-
-    rest = rpc.get_events(GetEventsParams(queue=queue, count=8))
-    assert len(rest.events) == 1
+def test_get_events_method_not_found(rpc: RpcClient) -> None:
+    response = rpc.call("get_events", params={"queue": "jobs"})
+    assert response["error"]["code"] == -32601
 
 
 def test_post_event_nonexistent_queue(rpc: RpcClient) -> None:
@@ -143,11 +100,6 @@ def test_post_event_nonexistent_queue(rpc: RpcClient) -> None:
 
 def test_post_event_invalid_params(rpc: RpcClient) -> None:
     response = rpc.call("post_event", params={})
-    assert response["error"]["code"] == -32602
-
-
-def test_get_events_invalid_params(rpc: RpcClient) -> None:
-    response = rpc.call("get_events", params={})
     assert response["error"]["code"] == -32602
 
 

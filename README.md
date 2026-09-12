@@ -1,6 +1,6 @@
 # Airbus
 
-Rust binary plus a Python test client.
+Rust binary plus a Python test client. For dedicated system documentation, see [docs/airbus/](../docs/airbus/overview.md).
 
 ```
 airbus/
@@ -30,7 +30,7 @@ Layers are composed, not subclassed. `AppService` has no TCP or JSON-RPC types;
 | proto | `src/proto/rpc` | JSON-RPC **documents** (envelope) — not Protocol Buffers |
 | proto | `src/proto/payloads` | generated params/result types from `schema/payloads/` |
 | runtime | `src/runtime` | work queue, UUIDv7 |
-| app | `src/app` (`AppService`) | `ping`, `add`, `post_event`, `get_events`, `list_queues`, `peek_events` |
+| app | `src/app` (`AppService`) | `ping`, `add`, `post_event`, `list_queues`, `peek_events`, `create_queue`, `attach_listener`, `detach_listener`, `list_listeners` |
 | composition | `src/main.rs` | parse CLI, bind methods, serve TCP (+ optional HTTP) |
 
 `RpcServer` sits in `src/io`: it feeds request bytes into `proto` and writes the
@@ -60,9 +60,14 @@ generated types.
 | Method | Behavior |
 | ------ | -------- |
 | `post_event` | Publish `{ queue, event }` → `{ id, queue }` |
-| `get_events` | **Destructive** consume `{ queue, count? }` → `{ queue, events }` |
-| `list_queues` | `{ queues: [{ name, depth }] }` |
+| `list_queues` | `{ queues: [{ name, depth, mode, listener_count }] }` |
 | `peek_events` | Non-destructive `{ queue, count? }` → `{ queue, events: [{ id, event }] }` |
+| `create_queue` | Configure and create an event queue |
+| `attach_listener` | Attach a client-side port listener to a queue for push event delivery |
+| `detach_listener` | Detach an attached listener |
+| `list_listeners` | List attached listeners |
+
+Event consumption is push-based via registered listeners (`attach_listener` / `EventListener`). Polling (`get_events`) is not supported.
 
 ### HTTP debug UI
 

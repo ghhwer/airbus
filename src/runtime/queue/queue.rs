@@ -114,25 +114,6 @@ impl Queue {
             .collect()
     }
 
-    pub fn consume(&mut self, event_count: i64) -> Vec<Value> {
-        let n = if event_count < 0 {
-            0
-        } else {
-            event_count as usize
-        };
-        let mut result = Vec::with_capacity(n);
-        while result.len() < n {
-            let Some((&event_id, _)) = self.events.iter().next() else {
-                break;
-            };
-            if let Some(value) = self.remove_event(&event_id) {
-                result.push(value);
-            }
-        }
-        log::info("consumed events");
-        result
-    }
-
     pub fn first_event(&self) -> Option<(UuidV7, Value)> {
         self.events.iter().next().map(|(&id, v)| (id, v.clone()))
     }
