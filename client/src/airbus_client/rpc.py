@@ -150,6 +150,7 @@ class EventListener:
         host: str = "127.0.0.1",
         exhaustion_timeout_ms: int | None = None,
         max_retries: int | None = None,
+        max_events: int | None = None,
     ) -> None:
         self._client = client
         self._queue = queue
@@ -157,7 +158,8 @@ class EventListener:
         self._host = host
         self._exhaustion_timeout_ms = exhaustion_timeout_ms
         self._max_retries = max_retries
-
+        self._max_events = max_events
+    
         self._server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._server_sock.bind((self._host, 0))
@@ -209,6 +211,9 @@ class EventListener:
                 conn.close()
 
     def _receive_event(self, event: dict[str, Any]) -> None:
+        if self._max_events is not None and len(self.events) >= self._max_events:
+            self.events.pop(0)  # drop the oldest event
+        # Add the new event to the end of the list
         self.events.append(event)
         self._on_event(event)
 
