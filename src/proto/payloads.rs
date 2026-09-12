@@ -95,6 +95,7 @@ pub enum AirbusPayloadRoot {
     ListListenersParams(ListListenersParams),
     ListListenersResult(ListListenersResult),
     ListenerEventParams(ListenerEventParams),
+    ListenerEventResult(ListenerEventResult),
 }
 impl ::std::convert::From<QueueName> for AirbusPayloadRoot {
     fn from(value: QueueName) -> Self {
@@ -209,6 +210,11 @@ impl ::std::convert::From<ListListenersResult> for AirbusPayloadRoot {
 impl ::std::convert::From<ListenerEventParams> for AirbusPayloadRoot {
     fn from(value: ListenerEventParams) -> Self {
         Self::ListenerEventParams(value)
+    }
+}
+impl ::std::convert::From<ListenerEventResult> for AirbusPayloadRoot {
+    fn from(value: ListenerEventResult) -> Self {
+        Self::ListenerEventResult(value)
     }
 }
 #[doc = "`AttachListenerParams`"]
@@ -645,6 +651,59 @@ impl<'de> ::serde::Deserialize<'de> for ListenerEventParamsId {
             .map_err(|e: self::error::ConversionError| {
                 <D::Error as ::serde::de::Error>::custom(e.to_string())
             })
+    }
+}
+#[doc = "`ListenerEventResult`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct ListenerEventResult {
+    pub status: ListenerEventResultStatus,
+}
+#[doc = "`ListenerEventResultStatus`"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum ListenerEventResultStatus {
+    #[serde(rename = "ok")]
+    Ok,
+}
+impl ::std::fmt::Display for ListenerEventResultStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Ok => f.write_str("ok"),
+        }
+    }
+}
+impl ::std::str::FromStr for ListenerEventResultStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "ok" => Ok(Self::Ok),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for ListenerEventResultStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ListenerEventResultStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
     }
 }
 #[doc = "`PeekEventsParams`"]

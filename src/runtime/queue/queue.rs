@@ -1,40 +1,10 @@
+use super::ListenerRegistration;
 use crate::io::log;
 pub use crate::proto::payloads::{DispatchStrategy, QueueMode};
 use crate::runtime::UuidV7;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
-use std::time::{Duration, Instant};
-
-#[derive(Debug, Clone)]
-pub struct ListenerRegistration {
-    pub id: UuidV7,
-    pub host: String,
-    pub port: u16,
-    pub failure_count: u64,
-    pub unreachable_since: Option<Instant>,
-    pub max_retries: u64,
-    pub exhaustion_timeout: Duration,
-}
-
-impl ListenerRegistration {
-    pub fn new(
-        id: UuidV7,
-        host: String,
-        port: u16,
-        max_retries: u64,
-        exhaustion_timeout: Duration,
-    ) -> Self {
-        Self {
-            id,
-            host,
-            port,
-            failure_count: 0,
-            unreachable_since: None,
-            max_retries,
-            exhaustion_timeout,
-        }
-    }
-}
+use std::time::Instant;
 
 pub struct Queue {
     /// UUIDv7 keys are time-ordered, so iteration is FIFO by publish time.
@@ -88,8 +58,23 @@ impl Queue {
         &self.listeners
     }
 
-    pub fn listeners_mut(&mut self) -> &mut Vec<ListenerRegistration> {
-        &mut self.listeners
+    pub(super) fn record_delivery(
+        &mut self,
+        queue_name: &str,
+        listener_id: &UuidV7,
+        delivered: bool,
+        now: Instant,
+    ) {
+        let Some(listener) = self.listeners.iter_mut().find(|l| &l.id == listener_id) else {
+            return;
+        };
+        if listener.record_delivery(delivered, now) {
+            log::warn(&format!(
+                "client unreachable exhaustion: evicted listener {} on {}:{} for queue '{}' (retries={})",
+                listener.id, listener.host, listener.port, queue_name, listener.failure_count
+            ));
+            self.detach_listener(listener_id);
+        }
     }
 
     pub fn attach_listener(&mut self, listener: ListenerRegistration) {

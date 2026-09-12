@@ -44,7 +44,11 @@ impl Error {
     }
 
     pub fn method_not_found(method: impl Into<String>) -> Self {
-        Self::with_data(METHOD_NOT_FOUND, "Method not found", Value::String(method.into()))
+        Self::with_data(
+            METHOD_NOT_FOUND,
+            "Method not found",
+            Value::String(method.into()),
+        )
     }
 
     pub fn invalid_params(message: impl Into<String>) -> Self {
@@ -88,6 +92,36 @@ pub fn request_with_params(method: impl Into<String>, params: Value, id: Value) 
         map.insert("params".into(), params);
     }
     obj
+}
+
+/// Validate the envelope and correlation ID before decoding a generated result payload.
+pub fn decode_response<T: serde::de::DeserializeOwned>(
+    bytes: &[u8],
+    expected_id: &Value,
+) -> Result<T, String> {
+    let document: Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+    let response = document.as_object().ok_or("response must be an object")?;
+    if response.get("jsonrpc").and_then(Value::as_str) != Some(VERSION) {
+        return Err("invalid JSON-RPC response version".into());
+    }
+    if response.get("id") != Some(expected_id) {
+        return Err("JSON-RPC response id does not match request".into());
+    }
+    if response.contains_key("result") == response.contains_key("error") {
+        return Err("response must contain exactly one of result or error".into());
+    }
+    if let Some(error) = response.get("error") {
+        let code = error
+            .get("code")
+            .and_then(Value::as_i64)
+            .ok_or("invalid RPC error code")?;
+        let message = error
+            .get("message")
+            .and_then(Value::as_str)
+            .ok_or("invalid RPC error message")?;
+        return Err(format!("rpc error from client: {code}: {message}"));
+    }
+    serde_json::from_value(response["result"].clone()).map_err(|e| e.to_string())
 }
 
 pub fn notification(method: impl Into<String>) -> Value {
@@ -156,7 +190,12 @@ impl Server {
     fn handle_one(&self, value: &Value) -> Option<Value> {
         let obj = match value.as_object() {
             Some(o) => o,
-            None => return Some(error_response(Value::Null, &Error::invalid_request("Invalid Request"))),
+            None => {
+                return Some(error_response(
+                    Value::Null,
+                    &Error::invalid_request("Invalid Request"),
+                ))
+            }
         };
 
         let version_ok = obj

@@ -6,9 +6,10 @@ import threading
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from contextvars import ContextVar, Token
-from dataclasses import asdict, is_dataclass
+from functools import partial
 from typing import Any, Generic, TypeVar
 
+from airbus_client import protocol as proto
 from airbus_client.payloads import (
     AddParams,
     AddResult,
@@ -18,10 +19,8 @@ from airbus_client.payloads import (
     CreateQueueResult,
     DetachListenerParams,
     DetachListenerResult,
-    Event,
     GetEventsParams,
     GetEventsResult,
-    Listener,
     ListListenersParams,
     ListListenersResult,
     ListQueuesResult,
@@ -30,160 +29,10 @@ from airbus_client.payloads import (
     PingResult,
     PostEventParams,
     PostEventResult,
-    Queue,
-    QueueMode,
 )
+from airbus_client.protocol import RpcError
 
 T = TypeVar("T")
-
-
-def _to_jsonable(value: Any) -> Any:
-    if is_dataclass(value) and not isinstance(value, type):
-        return asdict(value)
-    return value
-
-
-def _from_post_event_result(data: dict[str, Any]) -> PostEventResult:
-    return PostEventResult(id=data["id"], queue=data["queue"])
-
-
-def _from_get_events_result(data: dict[str, Any]) -> GetEventsResult:
-    return GetEventsResult(queue=data["queue"], events=list(data["events"]))
-
-
-def _from_list_queues_result(data: dict[str, Any]) -> ListQueuesResult:
-    queues = [
-        Queue(
-            name=item["name"],
-            depth=int(item["depth"]),
-            mode=QueueMode(item["mode"]),
-            listener_count=int(item["listener_count"]),
-        )
-        for item in data["queues"]
-    ]
-    return ListQueuesResult(queues=queues)
-
-
-def _from_peek_events_result(data: dict[str, Any]) -> PeekEventsResult:
-    events = [
-        Event(id=item["id"], event=dict(item["event"])) for item in data["events"]
-    ]
-    return PeekEventsResult(queue=data["queue"], events=events)
-
-
-def _from_create_queue_result(data: dict[str, Any]) -> CreateQueueResult:
-    return CreateQueueResult(
-        queue=data["queue"],
-        mode=QueueMode(data["mode"]),
-        created=bool(data["created"]),
-    )
-
-
-def _from_attach_listener_result(data: dict[str, Any]) -> AttachListenerResult:
-    return AttachListenerResult(
-        listener_id=data["listener_id"],
-        queue=data["queue"],
-        status=data["status"],
-    )
-
-
-def _from_detach_listener_result(data: dict[str, Any]) -> DetachListenerResult:
-    return DetachListenerResult(
-        listener_id=data["listener_id"],
-        detached=bool(data["detached"]),
-    )
-
-
-def _from_list_listeners_result(data: dict[str, Any]) -> ListListenersResult:
-    listeners = [
-        Listener(
-            id=item["id"],
-            queue=item["queue"],
-            host=item["host"],
-            port=int(item["port"]),
-            mode=QueueMode(item["mode"]),
-            failure_count=int(item["failure_count"]),
-            active=bool(item["active"]),
-        )
-        for item in data["listeners"]
-    ]
-    return ListListenersResult(listeners=listeners)
-
-
-def _get_events_wire_params(params: GetEventsParams) -> dict[str, Any]:
-    payload: dict[str, Any] = {"queue": params.queue}
-    if params.count is not None:
-        payload["count"] = params.count
-    return payload
-
-
-def _peek_events_wire_params(params: PeekEventsParams) -> dict[str, Any]:
-    payload: dict[str, Any] = {"queue": params.queue}
-    if params.count is not None:
-        payload["count"] = params.count
-    return payload
-
-
-def _create_queue_wire_params(params: CreateQueueParams) -> dict[str, Any]:
-    payload: dict[str, Any] = {"queue": params.queue}
-    if params.mode is not None:
-        payload["mode"] = str(params.mode)
-    if params.dispatch_strategy is not None:
-        payload["dispatch_strategy"] = str(params.dispatch_strategy)
-    return payload
-
-
-def _attach_listener_wire_params(params: AttachListenerParams) -> dict[str, Any]:
-    payload: dict[str, Any] = {"queue": params.queue, "port": params.port}
-    if params.host is not None:
-        payload["host"] = params.host
-    if params.exhaustion_timeout_ms is not None:
-        payload["exhaustion_timeout_ms"] = params.exhaustion_timeout_ms
-    if params.max_retries is not None:
-        payload["max_retries"] = params.max_retries
-    return payload
-
-
-def _detach_listener_wire_params(params: DetachListenerParams) -> dict[str, Any]:
-    return {"listener_id": params.listener_id}
-
-
-def _list_listeners_wire_params(
-    params: ListListenersParams | None,
-) -> dict[str, Any] | None:
-    if params is None:
-        return None
-    payload: dict[str, Any] = {}
-    if params.queue is not None:
-        payload["queue"] = params.queue
-    return payload
-
-
-def _decode_ping(result: Any) -> PingResult:
-    assert isinstance(result, str)
-    return result
-
-
-def _decode_add(result: Any) -> AddResult:
-    return float(result)
-
-
-class RpcError(Exception):
-    """JSON-RPC error object from a call or batch slot."""
-
-    def __init__(
-        self,
-        code: int,
-        message: str,
-        data: Any = None,
-        *,
-        id: int | str | None = None,
-    ) -> None:
-        super().__init__(f"{code}: {message}")
-        self.code = code
-        self.message = message
-        self.data = data
-        self.id = id
 
 
 class Pending(Generic[T]):
@@ -192,7 +41,7 @@ class Pending(Generic[T]):
     def __init__(self) -> None:
         self._done = False
         self._value: T | None = None
-        self._error: dict[str, Any] | None = None
+        self._error: RpcError | None = None
         self._id: int | str | None = None
 
     @property
@@ -200,20 +49,14 @@ class Pending(Generic[T]):
         if not self._done:
             raise RuntimeError("batch has not been sent yet")
         if self._error is not None:
-            raise RpcError(
-                self._error["code"],
-                self._error["message"],
-                self._error.get("data"),
-                id=self._id,
-            )
+            raise self._error
         return self._value  # type: ignore[return-value]
 
     def _resolve(self, response: dict[str, Any], decode: Callable[[Any], T]) -> None:
-        self._id = response.get("id")
-        if "error" in response:
-            self._error = response["error"]
-        else:
-            self._value = decode(response["result"])
+        try:
+            self._value = decode(proto.response_result(response))
+        except RpcError as error:
+            self._error = error
         self._done = True
 
 
@@ -229,9 +72,7 @@ class _BatchSession:
 
     def enqueue_notify(self, method: str, params: Any = None) -> None:
         self._ensure_open()
-        request: dict[str, Any] = {"jsonrpc": "2.0", "method": method}
-        if params is not None:
-            request["params"] = _to_jsonable(params)
+        request = proto.request(method, params)
         self._requests.append(request)
         self._slots.append(None)
 
@@ -244,9 +85,7 @@ class _BatchSession:
         self._ensure_open()
         req_id = self._next_id
         self._next_id += 1
-        request: dict[str, Any] = {"jsonrpc": "2.0", "method": method, "id": req_id}
-        if params is not None:
-            request["params"] = _to_jsonable(params)
+        request = proto.request(method, params, req_id)
         pending: Pending[T] = Pending()
         self._requests.append(request)
         self._slots.append((pending, decode))
@@ -260,21 +99,12 @@ class _BatchSession:
             return
 
         response = self._client._raw(self._requests)
-        by_id: dict[Any, dict[str, Any]] = {}
-        if response is not None:
-            if not isinstance(response, list):
-                raise TypeError("batch response must be a JSON array")
-            for item in response:
-                by_id[item["id"]] = item
-
-        for request, slot in zip(self._requests, self._slots, strict=True):
-            if slot is None:
-                continue
-            pending, decode = slot
-            req_id = request["id"]
-            if req_id not in by_id:
-                raise LookupError(f"missing batch response for id={req_id!r}")
-            pending._resolve(by_id[req_id], decode)
+        responses = proto.batch_responses(self._requests, response)
+        for document, slot in zip(responses, self._slots, strict=True):
+            if slot is not None:
+                pending, decode = slot
+                assert document is not None
+                pending._resolve(document, decode)
 
         self._sent = True
 
@@ -283,9 +113,7 @@ class _BatchSession:
             raise RuntimeError("cannot enqueue on a sent batch")
 
 
-_active_batch: ContextVar[_BatchSession | None] = ContextVar(
-    "airbus_rpc_batch", default=None
-)
+_active_batch: ContextVar[_BatchSession | None] = ContextVar("airbus_rpc_batch", default=None)
 
 
 class _BatchContext(AbstractContextManager["RpcClient"]):
@@ -370,24 +198,9 @@ class EventListener:
                     chunks.append(chunk)
                 body = b"".join(chunks).decode().strip()
                 if body:
-                    doc = json.loads(body)
-                    req_id = doc.get("id", 1)
-                    params = doc.get("params", {})
-                    try:
-                        self.events.append(params)
-                        self._on_event(params)
-                        res = {
-                            "jsonrpc": "2.0",
-                            "result": {"status": "ok"},
-                            "id": req_id,
-                        }
-                    except Exception as e:
-                        res = {
-                            "jsonrpc": "2.0",
-                            "error": {"code": -32603, "message": str(e)},
-                            "id": req_id,
-                        }
-                    conn.sendall(json.dumps(res).encode())
+                    response = proto.handle_event(body, self._receive_event)
+                    if response is not None:
+                        conn.sendall(json.dumps(response).encode())
                     try:
                         conn.shutdown(socket.SHUT_WR)
                     except OSError:
@@ -396,6 +209,10 @@ class EventListener:
                 pass
             finally:
                 conn.close()
+
+    def _receive_event(self, event: dict[str, Any]) -> None:
+        self.events.append(event)
+        self._on_event(event)
 
     def start(self) -> EventListener:
         self._running = True
@@ -425,9 +242,7 @@ class EventListener:
         self._running = False
         if self._listener_id is not None:
             try:
-                self._client.detach_listener(
-                    DetachListenerParams(listener_id=self._listener_id)
-                )
+                self._client.detach_listener(DetachListenerParams(listener_id=self._listener_id))
             except Exception:
                 pass
             self._listener_id = None
@@ -456,9 +271,7 @@ class RpcClient:
         return self._raw_text(json.dumps(payload))
 
     def _raw_text(self, text: str) -> Any | None:
-        with socket.create_connection(
-            (self.host, self.port), timeout=self.timeout
-        ) as sock:
+        with socket.create_connection((self.host, self.port), timeout=self.timeout) as sock:
             sock.sendall(text.encode())
             sock.shutdown(socket.SHUT_WR)
             chunks: list[bytes] = []
@@ -476,17 +289,12 @@ class RpcClient:
         """Defer subsequent calls/notifies into one JSON-RPC batch until the block exits."""
         return _BatchContext(self)
 
-    def call(
-        self, method: str, params: Any = None, id: int | str = 1
-    ) -> Any | Pending[Any]:
+    def call(self, method: str, params: Any = None, id: int | str = 1) -> Any | Pending[Any]:
         batch = _active_batch.get()
         if batch is not None:
             return batch.enqueue_call(method, params, lambda result: result)
 
-        request: dict[str, Any] = {"jsonrpc": "2.0", "method": method, "id": id}
-        if params is not None:
-            request["params"] = _to_jsonable(params)
-        return self._raw(request)
+        return proto.validate_response(self._raw(proto.request(method, params, id)), id)
 
     def notify(self, method: str, params: Any = None) -> None:
         batch = _active_batch.get()
@@ -494,51 +302,47 @@ class RpcClient:
             batch.enqueue_notify(method, params)
             return
 
-        request: dict[str, Any] = {"jsonrpc": "2.0", "method": method}
-        if params is not None:
-            request["params"] = _to_jsonable(params)
+        request = proto.request(method, params)
         if self._raw(request) is not None:
             raise AssertionError("JSON-RPC notification must not produce a response")
 
     def ping(self) -> PingResult | Pending[PingResult]:
-        return self._invoke("ping", None, _decode_ping)
+        return self._invoke("ping", None, partial(proto.decode_result, "ping", PingResult))
 
     def add(self, params: AddParams) -> AddResult | Pending[AddResult]:
-        return self._invoke("add", params, _decode_add)
+        return self._invoke("add", params, partial(proto.decode_result, "add", AddResult))
 
     def create_queue(
         self, params: CreateQueueParams
     ) -> CreateQueueResult | Pending[CreateQueueResult]:
         return self._invoke(
             "create_queue",
-            _create_queue_wire_params(params),
-            _from_create_queue_result,
+            params,
+            partial(proto.decode_result, "create_queue", CreateQueueResult),
         )
 
-    def post_event(
-        self, params: PostEventParams
-    ) -> PostEventResult | Pending[PostEventResult]:
-        return self._invoke("post_event", params, _from_post_event_result)
+    def post_event(self, params: PostEventParams) -> PostEventResult | Pending[PostEventResult]:
+        return self._invoke(
+            "post_event", params, partial(proto.decode_result, "post_event", PostEventResult)
+        )
 
-    def get_events(
-        self, params: GetEventsParams
-    ) -> GetEventsResult | Pending[GetEventsResult]:
+    def get_events(self, params: GetEventsParams) -> GetEventsResult | Pending[GetEventsResult]:
         return self._invoke(
             "get_events",
-            _get_events_wire_params(params),
-            _from_get_events_result,
+            params,
+            partial(proto.decode_result, "get_events", GetEventsResult),
         )
 
     def list_queues(self) -> ListQueuesResult | Pending[ListQueuesResult]:
-        return self._invoke("list_queues", None, _from_list_queues_result)
+        return self._invoke(
+            "list_queues", None, partial(proto.decode_result, "list_queues", ListQueuesResult)
+        )
 
-    def peek_events(
-        self, params: PeekEventsParams
-    ) -> PeekEventsResult | Pending[PeekEventsResult]:
+    def peek_events(self, params: PeekEventsParams) -> PeekEventsResult | Pending[PeekEventsResult]:
         return self._invoke(
             "peek_events",
-            _peek_events_wire_params(params),
-            _from_peek_events_result,
+            params,
+            partial(proto.decode_result, "peek_events", PeekEventsResult),
         )
 
     def attach_listener(
@@ -546,8 +350,8 @@ class RpcClient:
     ) -> AttachListenerResult | Pending[AttachListenerResult]:
         return self._invoke(
             "attach_listener",
-            _attach_listener_wire_params(params),
-            _from_attach_listener_result,
+            params,
+            partial(proto.decode_result, "attach_listener", AttachListenerResult),
         )
 
     def detach_listener(
@@ -555,8 +359,8 @@ class RpcClient:
     ) -> DetachListenerResult | Pending[DetachListenerResult]:
         return self._invoke(
             "detach_listener",
-            _detach_listener_wire_params(params),
-            _from_detach_listener_result,
+            params,
+            partial(proto.decode_result, "detach_listener", DetachListenerResult),
         )
 
     def list_listeners(
@@ -564,8 +368,8 @@ class RpcClient:
     ) -> ListListenersResult | Pending[ListListenersResult]:
         return self._invoke(
             "list_listeners",
-            _list_listeners_wire_params(params),
-            _from_list_listeners_result,
+            params,
+            partial(proto.decode_result, "list_listeners", ListListenersResult),
         )
 
     def listen(
@@ -593,17 +397,12 @@ class RpcClient:
         params: Any,
         decode: Callable[[Any], T],
     ) -> T | Pending[T]:
+        params = proto.to_wire(params)
+        proto.validate_payload(method, "params", params)
         batch = _active_batch.get()
         if batch is not None:
             return batch.enqueue_call(method, params, decode)
 
         response = self.call(method, params=params)
         assert not isinstance(response, Pending)
-        if "error" in response:
-            raise RpcError(
-                response["error"]["code"],
-                response["error"]["message"],
-                response["error"].get("data"),
-                id=response.get("id"),
-            )
-        return decode(response["result"])
+        return decode(proto.response_result(response))

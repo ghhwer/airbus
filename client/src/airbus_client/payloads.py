@@ -144,3 +144,12 @@ class ListenerEventParams:
     queue: str
     id: str
     event: dict[str, Any]
+
+
+class Status(StrEnum):
+    ok = 'ok'
+
+
+@dataclass
+class ListenerEventResult:
+    status: Status

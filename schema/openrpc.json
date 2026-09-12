@@ -7,6 +7,14 @@
   },
   "methods": [
     {
+      "name": "on_event",
+      "summary": "Deliver an event to an attached listener and receive its acknowledgment",
+      "x-receiver": "listener",
+      "paramStructure": "by-name",
+      "params": [{"name": "params", "required": true, "schema": {"$ref": "payloads/listener_event_params.schema.json"}}],
+      "result": {"name": "result", "schema": {"$ref": "payloads/listener_event_result.schema.json"}}
+    },
+    {
       "name": "ping",
       "summary": "Liveness check",
       "params": [],

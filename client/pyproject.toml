@@ -3,7 +3,7 @@ name = "airbus-client"
 version = "0.1.0"
 description = "Python test client for the Airbus Rust binary"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = ["jsonschema>=4.26.0"]
 
 [build-system]
 requires = ["hatchling"]
@@ -19,7 +19,7 @@ default = true
 
 [dependency-groups]
 dev = [
-    "datamodel-code-generator>=0.78.0",
+    "datamodel-code-generator==0.78.0",
     "pytest>=9.1.1",
 ]
 

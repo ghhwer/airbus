@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://airbus.local/schema/payloads/listener_event_result.schema.json",
+  "title": "ListenerEventResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status"],
+  "properties": {
+    "status": {"type": "string", "enum": ["ok"]}
+  }
+}

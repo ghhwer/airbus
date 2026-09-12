@@ -5,7 +5,7 @@ SCHEMA_DIR := schema/payloads
 HTTP_URL ?= 127.0.0.1:9098
 RESOURCES ?= $(CURDIR)/resources/ui
 
-.PHONY: all clean run setup client test test-unit test-integration generate build
+.PHONY: all clean run setup client test test-unit test-integration generate build check-protocol
 
 all: build
 
@@ -33,15 +33,21 @@ client: build setup
 # Regenerate Rust + Python payload types from schema/payloads/*.schema.json
 # Requires: cargo-typify (cargo install cargo-typify) and client dev deps (make setup).
 generate: setup
-	python3 scripts/generate_payloads.py
+	uv run python scripts/generate_payloads.py
+
+.PHONY: check-protocol
+check-protocol:
+	uv run python scripts/check_protocol_boundaries.py
+	uv run python scripts/generate_payloads.py --check
 
 test-unit:
 	cargo test
+	node tests/protocol.test.mjs
 
 test-integration: build setup
 	cd $(CLIENT_DIR) && AIRBUS_BIN="$(CURDIR)/$(TARGET)" uv run pytest
 
-test: test-unit test-integration
+test: check-protocol test-unit test-integration
 
 clean:
 	cargo clean

@@ -1,3 +1,5 @@
+import { request, responseResult } from "./protocol.js";
+
 const liveEl = document.getElementById("live");
 const totalsEl = document.getElementById("totals");
 const queueCountEl = document.getElementById("queue-count");
@@ -26,19 +28,15 @@ function escapeHtml(s) {
 }
 
 async function rpc(method, params) {
-  const request = { jsonrpc: "2.0", method, id: rpcId++ };
-  if (params !== undefined) request.params = params;
+  const id = rpcId++;
   const res = await fetch("/rpc", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(request),
+    body: JSON.stringify(request(method, params, id)),
   });
   const response = JSON.parse(await res.text());
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  if (response.error) {
-    throw new Error(`${response.error.code}: ${response.error.message}`);
-  }
-  return response.result;
+  return responseResult(response, id);
 }
 
 function setLive(ok, detail = "") {
