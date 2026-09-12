@@ -1,10 +1,22 @@
 """Integration tests against a live Airbus process over TCP."""
 
 import re
+import socket
+import time
 import uuid
 
-from airbus_client.payloads import GetEventsParams, PeekEventsParams, PostEventParams
-from airbus_client.rpc import RpcClient
+import pytest
+
+from airbus_client.payloads import (
+    AttachListenerParams,
+    CreateQueueParams,
+    GetEventsParams,
+    ListListenersParams,
+    PeekEventsParams,
+    PostEventParams,
+    QueueMode,
+)
+from airbus_client.rpc import RpcClient, RpcError
 
 UUID_V7 = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
@@ -57,10 +69,13 @@ def test_batch_ping_and_queue(rpc: RpcClient) -> None:
     with rpc.batch():
         pong = rpc.ping()
         rpc.notify("ping")
+        created = rpc.create_queue(CreateQueueParams(queue=queue))
         posted = rpc.post_event(PostEventParams(queue=queue, event=event))
         got = rpc.get_events(GetEventsParams(queue=queue))
 
     assert pong.result == "pong"
+    assert created.result.queue == queue
+    assert created.result.created is True
     assert posted.result.queue == queue
     assert UUID_V7.match(posted.result.id)
     assert got.result.queue == queue
@@ -69,6 +84,7 @@ def test_batch_ping_and_queue(rpc: RpcClient) -> None:
 
 def test_post_and_get_event(rpc: RpcClient) -> None:
     queue = f"jobs-{uuid.uuid4()}"
+    rpc.create_queue(CreateQueueParams(queue=queue))
     event = {"type": "hello", "n": 1}
     posted = rpc.post_event(PostEventParams(queue=queue, event=event))
     assert posted.queue == queue
@@ -88,6 +104,7 @@ def test_get_events_empty_queue(rpc: RpcClient) -> None:
 
 def test_get_events_default_count_is_one(rpc: RpcClient) -> None:
     queue = f"jobs-{uuid.uuid4()}"
+    rpc.create_queue(CreateQueueParams(queue=queue))
     rpc.post_event(PostEventParams(queue=queue, event={"n": 1}))
     rpc.post_event(PostEventParams(queue=queue, event={"n": 2}))
 
@@ -103,6 +120,7 @@ def test_get_events_default_count_is_one(rpc: RpcClient) -> None:
 
 def test_get_events_respects_count(rpc: RpcClient) -> None:
     queue = f"jobs-{uuid.uuid4()}"
+    rpc.create_queue(CreateQueueParams(queue=queue))
     for n in (1, 2, 3):
         rpc.post_event(PostEventParams(queue=queue, event={"n": n}))
 
@@ -111,6 +129,16 @@ def test_get_events_respects_count(rpc: RpcClient) -> None:
 
     rest = rpc.get_events(GetEventsParams(queue=queue, count=8))
     assert len(rest.events) == 1
+
+
+def test_post_event_nonexistent_queue(rpc: RpcClient) -> None:
+    queue = f"nonexistent-{uuid.uuid4()}"
+    try:
+        rpc.post_event(PostEventParams(queue=queue, event={"type": "fail"}))
+        assert False, "expected RpcError"
+    except RpcError as e:
+        assert e.code == -32602
+        assert "does not exist" in e.message
 
 
 def test_post_event_invalid_params(rpc: RpcClient) -> None:
@@ -126,6 +154,8 @@ def test_get_events_invalid_params(rpc: RpcClient) -> None:
 def test_list_and_peek_events(rpc: RpcClient) -> None:
     queue = f"jobs-{uuid.uuid4()}"
     other = f"other-{uuid.uuid4()}"
+    rpc.create_queue(CreateQueueParams(queue=queue))
+    rpc.create_queue(CreateQueueParams(queue=other))
     event = {"type": "hello", "n": 1}
     posted = rpc.post_event(PostEventParams(queue=queue, event=event))
     rpc.post_event(PostEventParams(queue=queue, event={"n": 2}))
@@ -158,3 +188,167 @@ def test_peek_events_empty_queue(rpc: RpcClient) -> None:
 def test_peek_events_invalid_params(rpc: RpcClient) -> None:
     response = rpc.call("peek_events", params={})
     assert response["error"]["code"] == -32602
+
+
+def test_create_queue_modes(rpc: RpcClient) -> None:
+    q1 = f"bcast-{uuid.uuid4()}"
+    res1 = rpc.create_queue(CreateQueueParams(queue=q1, mode=QueueMode.broadcast))
+    assert res1.queue == q1
+    assert res1.mode == QueueMode.broadcast
+    assert res1.created is True
+
+    # Idempotent re-creation
+    res1_again = rpc.create_queue(
+        CreateQueueParams(queue=q1, mode=QueueMode.broadcast)
+    )
+    assert res1_again.created is False
+
+    q2 = f"work-{uuid.uuid4()}"
+    res2 = rpc.create_queue(CreateQueueParams(queue=q2, mode=QueueMode.worker))
+    assert res2.queue == q2
+    assert res2.mode == QueueMode.worker
+    assert res2.created is True
+
+
+def test_listen_broadcast(rpc: RpcClient) -> None:
+    queue = f"bcast-{uuid.uuid4()}"
+    rpc.create_queue(CreateQueueParams(queue=queue, mode=QueueMode.broadcast))
+
+    events_a: list[dict] = []
+    events_b: list[dict] = []
+
+    with rpc.listen(queue, on_event=events_a.append), rpc.listen(
+        queue, on_event=events_b.append
+    ):
+        listed = rpc.list_listeners(ListListenersParams(queue=queue))
+        assert len(listed.listeners) == 2
+
+        posted = rpc.post_event(
+            PostEventParams(queue=queue, event={"broadcast": "hello"})
+        )
+
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline and (not events_a or not events_b):
+            time.sleep(0.05)
+
+        assert len(events_a) == 1
+        assert len(events_b) == 1
+        assert events_a[0]["id"] == posted.id
+        assert events_a[0]["event"] == {"broadcast": "hello"}
+        assert events_b[0]["id"] == posted.id
+        assert events_b[0]["event"] == {"broadcast": "hello"}
+
+    # Context exit auto-detaches
+    listed_after = rpc.list_listeners(ListListenersParams(queue=queue))
+    assert len(listed_after.listeners) == 0
+
+
+def test_listen_competing_workers(rpc: RpcClient) -> None:
+    queue = f"workers-{uuid.uuid4()}"
+    rpc.create_queue(CreateQueueParams(queue=queue, mode=QueueMode.worker))
+
+    worker1_events: list[dict] = []
+    worker2_events: list[dict] = []
+
+    with rpc.listen(queue, on_event=worker1_events.append), rpc.listen(
+        queue, on_event=worker2_events.append
+    ):
+        for i in range(4):
+            rpc.post_event(PostEventParams(queue=queue, event={"task_id": i}))
+
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline and (
+            len(worker1_events) + len(worker2_events) < 4
+        ):
+            time.sleep(0.05)
+
+        assert len(worker1_events) == 2
+        assert len(worker2_events) == 2
+        tasks1 = {e["event"]["task_id"] for e in worker1_events}
+        tasks2 = {e["event"]["task_id"] for e in worker2_events}
+        assert tasks1.isdisjoint(tasks2)
+        assert tasks1 | tasks2 == {0, 1, 2, 3}
+
+
+@pytest.mark.parametrize("exhaust", [False, True])
+def test_broadcast_retries_only_unacknowledged_listeners(
+    rpc: RpcClient, exhaust: bool
+) -> None:
+    queue = f"retry-{uuid.uuid4()}"
+    rpc.create_queue(CreateQueueParams(queue=queue))
+    healthy_events: list[dict] = []
+    attempts: list[dict] = []
+
+    def intermittent_listener(event: dict) -> None:
+        attempts.append(event)
+        if exhaust or len(attempts) == 1:
+            raise RuntimeError("temporary delivery failure")
+
+    with rpc.listen(queue, on_event=healthy_events.append), rpc.listen(
+        queue, on_event=intermittent_listener, max_retries=2
+    ):
+        posted = rpc.post_event(PostEventParams(queue=queue, event={"retry": True}))
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline:
+            if len(attempts) == 2 and not rpc.peek_events(
+                PeekEventsParams(queue=queue)
+            ).events:
+                break
+            time.sleep(0.02)
+
+        assert [event["id"] for event in healthy_events] == [posted.id]
+        assert [event["id"] for event in attempts] == [posted.id, posted.id]
+        assert not rpc.peek_events(PeekEventsParams(queue=queue)).events
+        assert len(rpc.list_listeners(ListListenersParams(queue=queue)).listeners) == (
+            1 if exhaust else 2
+        )
+
+
+def test_failed_listener_start_cleans_up(rpc: RpcClient) -> None:
+    listener = rpc.listen(f"missing-{uuid.uuid4()}")
+    with pytest.raises(RpcError, match="does not exist"), listener:
+        pytest.fail("registration should fail")
+
+    assert listener.listener_id is None
+    assert listener._thread is None
+    assert listener._server_sock.fileno() == -1
+
+
+def test_server_listener_eviction_on_dead_port(rpc: RpcClient) -> None:
+    queue = f"exhaust-{uuid.uuid4()}"
+    rpc.create_queue(CreateQueueParams(queue=queue, mode=QueueMode.worker))
+
+    # Bind and close socket to obtain an unused port
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(("127.0.0.1", 0))
+    dead_port = s.getsockname()[1]
+    s.close()
+
+    attached = rpc.attach_listener(
+        AttachListenerParams(
+            queue=queue,
+            port=dead_port,
+            host="127.0.0.1",
+            max_retries=2,
+            exhaustion_timeout_ms=100,
+        )
+    )
+    assert attached.status == "attached"
+
+    listeners = rpc.list_listeners(ListListenersParams(queue=queue))
+    assert len(listeners.listeners) == 1
+
+    # Publish an event to trigger delivery attempts to the dead port
+    rpc.post_event(PostEventParams(queue=queue, event={"test": "dead"}))
+
+    # Wait for exhaustion eviction
+    deadline = time.monotonic() + 3.0
+    evicted = False
+    while time.monotonic() < deadline:
+        time.sleep(0.1)
+        listeners = rpc.list_listeners(ListListenersParams(queue=queue))
+        if len(listeners.listeners) == 0:
+            evicted = True
+            break
+
+    assert evicted, "Unreachable listener should have been evicted by Airbus"

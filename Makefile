@@ -12,14 +12,20 @@ all: build
 build:
 	mkdir -p $(TARGET_DIR)
 	cargo build --release
-	cp -f target/release/airbus $(TARGET)
+	@if [ -n "$$CARGO_TARGET_DIR" ] && [ -f "$$CARGO_TARGET_DIR/release/airbus" ]; then \
+		cp -f "$$CARGO_TARGET_DIR/release/airbus" $(TARGET); \
+	elif [ -f "target/release/airbus" ]; then \
+		cp -f target/release/airbus $(TARGET); \
+	else \
+		cp -f $$(cargo metadata --format-version 1 2>/dev/null | jq -r .target_directory 2>/dev/null)/release/airbus $(TARGET); \
+	fi
 
 run: build
 	./$(TARGET) --listen 127.0.0.1:9097 --http $(HTTP_URL) --resources $(RESOURCES)
 
 # Prefer the repo-root uv workspace (editable airbus-client + shared .venv).
 setup:
-	cd .. && uv sync --package airbus-client --all-groups
+	cd .. && uv sync --all-packages
 
 client: build setup
 	cd $(CLIENT_DIR) && AIRBUS_BIN="$(CURDIR)/$(TARGET)" uv run python -m airbus_client

@@ -186,6 +186,7 @@ async function enqueueSimple() {
   const type = document.getElementById("post-type").value.trim() || "event";
   const n = Number(document.getElementById("post-n").value) || 0;
   selectQueue(queue);
+  await rpc("create_queue", { queue });
   await rpc("post_event", { queue, event: { type, n } });
   document.getElementById("post-n").value = String(n + 1);
   await refresh(true);
@@ -206,6 +207,7 @@ async function enqueueJson() {
     return;
   }
   selectQueue(queue);
+  await rpc("create_queue", { queue });
   await rpc("post_event", { queue, event });
   await refresh(true);
 }

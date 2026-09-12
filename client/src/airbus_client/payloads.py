@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-
 type PingResult = str
 type AddResult = float
 

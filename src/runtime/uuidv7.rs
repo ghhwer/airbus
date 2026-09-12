@@ -113,6 +113,26 @@ impl fmt::Debug for UuidV7 {
     }
 }
 
+impl std::str::FromStr for UuidV7 {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let clean: String = s.chars().filter(|&c| c != '-').collect();
+        if clean.len() != 32 {
+            return Err(format!("invalid uuid length: {}", s.len()));
+        }
+        if !clean.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err("invalid hex in uuid".to_string());
+        }
+        let mut bytes = [0u8; 16];
+        for i in 0..16 {
+            bytes[i] = u8::from_str_radix(&clean[i * 2..i * 2 + 2], 16)
+                .map_err(|e| format!("invalid hex in uuid: {e}"))?;
+        }
+        Ok(Self { bytes })
+    }
+}
+
 pub fn generate_uuidv7() -> UuidV7 {
     UuidV7::generate()
 }
