@@ -57,6 +57,10 @@
                 <span class="metric-label">Δ / poll</span>
                 <span id="m-rate" class="metric-value">—</span>
               </div>
+              <div class="metric">
+                <span class="metric-label">Listeners</span>
+                <span id="m-listeners" class="metric-value">—</span>
+              </div>
             </div>
           </div>
 
@@ -70,6 +74,19 @@
           </div>
           <div id="lane" class="lane">
             <p class="empty">Pick a queue on the left to see ordering.</p>
+          </div>
+
+          <div class="section-divider">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">TCP Subscribers · Reverse-client delivery</p>
+                <h3>Attached Listeners</h3>
+              </div>
+              <span id="listener-count" class="chip">0</span>
+            </div>
+          </div>
+          <div id="listeners" class="listener-list">
+            <p class="empty">No attached listeners for this queue.</p>
           </div>
 
           <div class="actions">

@@ -396,6 +396,118 @@ h2 {
   white-space: nowrap;
 }
 
+.section-divider {
+  border-top: 1px solid var(--line);
+  margin-top: 0.85rem;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem 0.35rem;
+}
+
+h3 {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.listener-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.35rem 1rem 0.75rem;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.listener-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0f1318;
+  padding: 0.5rem 0.75rem;
+}
+
+.listener-main {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.listener-status {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.listener-status.active {
+  background: var(--good);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--good) 30%, transparent);
+}
+
+.listener-status.inactive {
+  background: var(--danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 30%, transparent);
+}
+
+.listener-endpoint {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.listener-id {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.listener-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+}
+
+.listener-mode {
+  text-transform: uppercase;
+  font-size: 0.65rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--fill) 18%, transparent);
+  color: var(--fill);
+  border: 1px solid color-mix(in srgb, var(--fill) 35%, transparent);
+}
+
+.listener-retries {
+  color: var(--muted);
+}
+
+.listener-retries.failed {
+  color: var(--danger);
+}
+
+.q-listeners {
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+.btn-sm {
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;

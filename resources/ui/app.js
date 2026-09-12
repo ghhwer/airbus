@@ -8,8 +8,11 @@ const queueNameEl = document.getElementById("queue-name");
 const stageTitle = document.getElementById("stage-title");
 const mDepth = document.getElementById("m-depth");
 const mRate = document.getElementById("m-rate");
+const mListeners = document.getElementById("m-listeners");
 const fillBar = document.getElementById("fill-bar");
 const laneEl = document.getElementById("lane");
+const listenerCountEl = document.getElementById("listener-count");
+const listenersEl = document.getElementById("listeners");
 
 const SOFT_CAP = 32;
 const PEEK_N = 40;
@@ -97,10 +100,11 @@ function renderQueueList(queues) {
     btn.type = "button";
     btn.className = `q-item${q.name === selectedQueue ? " active" : ""}`;
     btn.dataset.queue = q.name;
+    const lisCount = q.listener_count ?? 0;
     btn.innerHTML = `
       <div class="q-row">
         <span class="q-name">${escapeHtml(q.name)}</span>
-        <span class="q-depth">${q.depth}</span>
+        <span class="q-depth">${q.depth} · <span class="q-listeners" title="${lisCount} attached listener${lisCount === 1 ? "" : "s"}">${lisCount} lis</span></span>
       </div>
       <div class="q-track"><div class="q-fill" style="width:${pct}%"></div></div>
     `;
@@ -139,6 +143,50 @@ function renderLane(events, depth) {
   });
 }
 
+function renderListeners(listeners) {
+  const count = listeners ? listeners.length : 0;
+  if (mListeners) mListeners.textContent = String(count);
+  if (listenerCountEl) listenerCountEl.textContent = String(count);
+
+  if (!listenersEl) return;
+
+  if (!count) {
+    listenersEl.innerHTML =
+      '<p class="empty">No attached listeners for this queue.</p>';
+    return;
+  }
+
+  listenersEl.innerHTML = "";
+  for (const l of listeners) {
+    const card = document.createElement("div");
+    card.className = "listener-card";
+    const statusClass = l.active ? "active" : "inactive";
+    const statusText = l.active ? "active" : "inactive";
+    const retriesText =
+      l.failure_count > 0
+        ? `${l.failure_count} retries`
+        : "healthy";
+    const retriesClass =
+      l.failure_count > 0 ? "listener-retries failed" : "listener-retries";
+
+    card.innerHTML = `
+      <div class="listener-main">
+        <span class="listener-status ${statusClass}" title="Status: ${statusText}"></span>
+        <div>
+          <div class="listener-endpoint">${escapeHtml(l.host)}:${l.port}</div>
+          <div class="listener-id" title="${escapeHtml(l.id)}">${escapeHtml(shortId(l.id))}</div>
+        </div>
+      </div>
+      <div class="listener-meta">
+        <span class="listener-mode">${escapeHtml(l.mode || "broadcast")}</span>
+        <span class="${retriesClass}">${retriesText}</span>
+        <button type="button" class="btn danger btn-sm" data-detach="${escapeHtml(l.id)}" title="Detach this listener">Detach</button>
+      </div>
+    `;
+    listenersEl.appendChild(card);
+  }
+}
+
 function updateRate(depth) {
   const prev = lastDepthByQueue.get(selectedQueue);
   const delta = prev === undefined ? 0 : depth - prev;
@@ -152,13 +200,15 @@ async function refresh(forcePeek = false) {
     const listed = await rpc("list_queues");
     const queues = listed.queues || [];
     const totalDepth = queues.reduce((s, q) => s + q.depth, 0);
-    totalsEl.textContent = `${queues.length} queues · ${totalDepth} msgs`;
+    const totalListeners = queues.reduce((s, q) => s + (q.listener_count || 0), 0);
+    totalsEl.textContent = `${queues.length} queues · ${totalDepth} msgs · ${totalListeners} listeners`;
     renderQueueList(queues);
     setLive(true);
 
     const name = (queueNameEl.value.trim() || selectedQueue).trim();
     if (!name) {
       laneEl.innerHTML = '<p class="empty">Pick a queue on the left to see ordering.</p>';
+      renderListeners([]);
       return;
     }
     if (name !== selectedQueue || forcePeek) selectQueue(name);
@@ -171,6 +221,11 @@ async function refresh(forcePeek = false) {
     });
     renderLane(peeked.events || [], depth);
     updateRate(depth);
+
+    const listenersRes = await rpc("list_listeners", {
+      queue: selectedQueue,
+    });
+    renderListeners(listenersRes.listeners || []);
     lastError = "";
   } catch (err) {
     lastError = err.message;
@@ -227,6 +282,22 @@ queueNameEl.addEventListener("change", () => {
   selectQueue(queueNameEl.value.trim() || "demo");
   refresh(true);
 });
+
+if (listenersEl) {
+  listenersEl.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-detach]");
+    if (!btn) return;
+    const listenerId = btn.dataset.detach;
+    btn.disabled = true;
+    btn.textContent = "Detaching…";
+    rpc("detach_listener", { listener_id: listenerId })
+      .then(() => refresh(true))
+      .catch((err) => {
+        setLive(false, "error");
+        totalsEl.textContent = err.message;
+      });
+  });
+}
 
 refresh(true);
 setInterval(() => refresh(false), 1500);
