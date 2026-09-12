@@ -304,3 +304,54 @@ def test_server_listener_eviction_on_dead_port(rpc: RpcClient) -> None:
             break
 
     assert evicted, "Unreachable listener should have been evicted by Airbus"
+
+
+def test_broadcast_retains_event_when_listener_dies_and_evicts(rpc: RpcClient) -> None:
+    queue = f"retain-{uuid.uuid4()}"
+    rpc.create_queue(CreateQueueParams(queue=queue, mode=QueueMode.broadcast))
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(("127.0.0.1", 0))
+    dead_port = s.getsockname()[1]
+    s.close()
+
+    rpc.attach_listener(
+        AttachListenerParams(
+            queue=queue,
+            port=dead_port,
+            host="127.0.0.1",
+            max_retries=2,
+            exhaustion_timeout_ms=100,
+        )
+    )
+
+    posted = rpc.post_event(PostEventParams(queue=queue, event={"test": "survives"}))
+
+    deadline = time.monotonic() + 3.0
+    evicted = False
+    while time.monotonic() < deadline:
+        time.sleep(0.05)
+        listeners = rpc.list_listeners(ListListenersParams(queue=queue))
+        if len(listeners.listeners) == 0:
+            evicted = True
+            break
+
+    assert evicted, "Unreachable listener should have been evicted"
+
+    # Event must NOT be dropped!
+    peek = rpc.peek_events(PeekEventsParams(queue=queue))
+    assert len(peek.events) == 1
+    assert peek.events[0].id == posted.id
+
+    # A new listener attaching should receive the event
+    received = []
+    with rpc.listen(queue, on_event=received.append):
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline:
+            if len(received) == 1:
+                break
+            time.sleep(0.05)
+
+    assert len(received) == 1
+    assert received[0]["id"] == posted.id
+    assert len(rpc.peek_events(PeekEventsParams(queue=queue)).events) == 0

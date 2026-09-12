@@ -632,6 +632,49 @@ fn broadcast_detach_releases_pending_delivery_without_adding_late_listeners() {
 }
 
 #[test]
+fn broadcast_detach_without_acknowledgment_retains_event_for_future_listeners() {
+    use airbus::runtime::queue::{ListenerRegistration, Queue};
+    use std::time::Duration;
+
+    let mut queue = Queue::new(QueueMode::Broadcast, DispatchStrategy::RoundRobin);
+    let dead = generate_uuidv7();
+    queue.attach_listener(ListenerRegistration::new(
+        dead,
+        "127.0.0.1".into(),
+        12345,
+        3,
+        Duration::from_secs(10),
+    ));
+    let event_id = generate_uuidv7();
+    queue.publish(event_id, json!({"n": 1})).unwrap();
+    assert_eq!(queue.broadcast_listeners(event_id).len(), 1);
+
+    // Dead listener is evicted/detached without acknowledging
+    assert!(queue.detach_listener(&dead));
+
+    // Event must NOT be dropped
+    assert_eq!(queue.depth(), 1);
+    assert_eq!(queue.first_event().unwrap().0, event_id);
+
+    // When a new listener attaches, the event is delivered to it
+    let healthy = generate_uuidv7();
+    queue.attach_listener(ListenerRegistration::new(
+        healthy,
+        "127.0.0.1".into(),
+        12346,
+        3,
+        Duration::from_secs(10),
+    ));
+    let recipients = queue.broadcast_listeners(event_id);
+    assert_eq!(recipients.len(), 1);
+    assert_eq!(recipients[0].id, healthy);
+
+    // When healthy acknowledges, event is completed
+    queue.acknowledge_broadcast(&event_id, &healthy);
+    assert_eq!(queue.depth(), 0);
+}
+
+#[test]
 fn test_attach_and_detach_listener() {
     let app = AppService::new();
     app.create_queue(create_params("stream", None, None))

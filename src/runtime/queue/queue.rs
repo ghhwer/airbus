@@ -11,6 +11,8 @@ pub struct Queue {
     events: BTreeMap<UuidV7, Value>,
     /// Recipients are fixed when broadcast delivery first starts.
     pending_broadcasts: BTreeMap<UuidV7, BTreeSet<UuidV7>>,
+    /// Tracks broadcast events that received at least one acknowledgment.
+    acknowledged_events: BTreeSet<UuidV7>,
     mode: QueueMode,
     dispatch_strategy: DispatchStrategy,
     listeners: Vec<ListenerRegistration>,
@@ -22,6 +24,7 @@ impl Queue {
         Self {
             events: BTreeMap::new(),
             pending_broadcasts: BTreeMap::new(),
+            acknowledged_events: BTreeSet::new(),
             mode,
             dispatch_strategy,
             listeners: Vec::new(),
@@ -84,16 +87,23 @@ impl Queue {
     pub fn detach_listener(&mut self, listener_id: &UuidV7) -> bool {
         if let Some(pos) = self.listeners.iter().position(|l| &l.id == listener_id) {
             self.listeners.remove(pos);
-            let completed: Vec<_> = self
-                .pending_broadcasts
-                .iter_mut()
-                .filter_map(|(event_id, pending)| {
-                    pending.remove(listener_id);
-                    pending.is_empty().then_some(*event_id)
-                })
-                .collect();
+            let mut completed = Vec::new();
+            let mut unacknowledged_exhausted = Vec::new();
+            for (event_id, pending) in self.pending_broadcasts.iter_mut() {
+                pending.remove(listener_id);
+                if pending.is_empty() {
+                    if self.acknowledged_events.contains(event_id) {
+                        completed.push(*event_id);
+                    } else {
+                        unacknowledged_exhausted.push(*event_id);
+                    }
+                }
+            }
             for event_id in completed {
                 self.remove_event(&event_id);
+            }
+            for event_id in unacknowledged_exhausted {
+                self.pending_broadcasts.remove(&event_id);
             }
             true
         } else {
@@ -120,6 +130,7 @@ impl Queue {
 
     pub fn remove_event(&mut self, event_id: &UuidV7) -> Option<Value> {
         self.pending_broadcasts.remove(event_id);
+        self.acknowledged_events.remove(event_id);
         self.events.remove(event_id)
     }
 
@@ -138,6 +149,7 @@ impl Queue {
     pub fn acknowledge_broadcast(&mut self, event_id: &UuidV7, listener_id: &UuidV7) {
         if let Some(pending) = self.pending_broadcasts.get_mut(event_id) {
             pending.remove(listener_id);
+            self.acknowledged_events.insert(*event_id);
             if pending.is_empty() {
                 self.remove_event(event_id);
             }
