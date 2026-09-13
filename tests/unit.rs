@@ -4,7 +4,7 @@ use airbus::io::rpc_server::RpcServer;
 use airbus::io::server::parse_listen;
 use airbus::proto::payloads::{
     AddParams, AttachListenerParams, CreateQueueParams, DetachListenerParams, DispatchStrategy,
-    PeekEventsParams, PostEventParams, QueueMode,
+    PeekEventsParams, PostEventParams, QueueMode, QueueReadyParams,
 };
 use airbus::proto::rpc::{
     self, Error, Server, INVALID_PARAMS, INVALID_REQUEST, METHOD_NOT_FOUND, PARSE_ERROR,
@@ -1055,3 +1055,60 @@ fn full_duplex_buffers_until_peer_attaches() {
         .unwrap();
     assert_eq!(queue.first_duplex_event_ready().unwrap().0, event_id);
 }
+
+#[test]
+fn queue_ready_missing_fifo_broadcast_and_duplex() {
+    let app = AppService::new();
+    let missing: QueueReadyParams = decode_params(&json!({ "queue": "nope" })).unwrap();
+    assert!(!app.queue_ready(missing).ready);
+
+    app.create_queue(create_params("fifo-q", Some(QueueMode::Fifo), None))
+        .unwrap();
+    let fifo: QueueReadyParams = decode_params(&json!({ "queue": "fifo-q" })).unwrap();
+    assert!(app.queue_ready(fifo).ready);
+
+    app.create_queue(create_params("bcast-q", Some(QueueMode::Broadcast), None))
+        .unwrap();
+    let bcast: QueueReadyParams = decode_params(&json!({ "queue": "bcast-q" })).unwrap();
+    assert!(app.queue_ready(bcast).ready);
+
+    app.create_queue(create_params("duplex-q", Some(QueueMode::FullDuplex), None))
+        .unwrap();
+    let duplex_name = "duplex-q";
+    let not_ready: QueueReadyParams = decode_params(&json!({ "queue": duplex_name })).unwrap();
+    assert!(!app.queue_ready(not_ready).ready);
+
+    let host_port = {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.local_addr().unwrap().port()
+    };
+    let device_port = {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.local_addr().unwrap().port()
+    };
+
+    app.attach_listener(decode_params(&json!({
+        "queue": duplex_name,
+        "port": host_port,
+        "host": "127.0.0.1",
+        "side": "host"
+    }))
+    .unwrap())
+    .unwrap();
+    let one_side: QueueReadyParams = decode_params(&json!({ "queue": duplex_name })).unwrap();
+    assert!(!app.queue_ready(one_side).ready);
+
+    app.attach_listener(decode_params(&json!({
+        "queue": duplex_name,
+        "port": device_port,
+        "host": "127.0.0.1",
+        "side": "device"
+    }))
+    .unwrap())
+    .unwrap();
+    let both: QueueReadyParams = decode_params(&json!({ "queue": duplex_name })).unwrap();
+    let result = app.queue_ready(both);
+    assert!(result.ready);
+    assert_eq!(result.queue.as_str(), duplex_name);
+}
+

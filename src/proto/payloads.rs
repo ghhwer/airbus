@@ -75,6 +75,7 @@ pub enum AirbusPayloadRoot {
     QueueName(QueueName),
     EventObject(EventObject),
     QueueMode(QueueMode),
+    QueueInfo(QueueInfo),
     DuplexSide(DuplexSide),
     DispatchStrategy(DispatchStrategy),
     PingResult(PingResult),
@@ -93,6 +94,8 @@ pub enum AirbusPayloadRoot {
     DetachListenerResult(DetachListenerResult),
     ListListenersParams(ListListenersParams),
     ListListenersResult(ListListenersResult),
+    QueueReadyParams(QueueReadyParams),
+    QueueReadyResult(QueueReadyResult),
     ListenerEventParams(ListenerEventParams),
     ListenerEventResult(ListenerEventResult),
 }
@@ -109,6 +112,11 @@ impl ::std::convert::From<EventObject> for AirbusPayloadRoot {
 impl ::std::convert::From<QueueMode> for AirbusPayloadRoot {
     fn from(value: QueueMode) -> Self {
         Self::QueueMode(value)
+    }
+}
+impl ::std::convert::From<QueueInfo> for AirbusPayloadRoot {
+    fn from(value: QueueInfo) -> Self {
+        Self::QueueInfo(value)
     }
 }
 impl ::std::convert::From<DuplexSide> for AirbusPayloadRoot {
@@ -199,6 +207,16 @@ impl ::std::convert::From<ListListenersParams> for AirbusPayloadRoot {
 impl ::std::convert::From<ListListenersResult> for AirbusPayloadRoot {
     fn from(value: ListListenersResult) -> Self {
         Self::ListListenersResult(value)
+    }
+}
+impl ::std::convert::From<QueueReadyParams> for AirbusPayloadRoot {
+    fn from(value: QueueReadyParams) -> Self {
+        Self::QueueReadyParams(value)
+    }
+}
+impl ::std::convert::From<QueueReadyResult> for AirbusPayloadRoot {
+    fn from(value: QueueReadyResult) -> Self {
+        Self::QueueReadyResult(value)
     }
 }
 impl ::std::convert::From<ListenerEventParams> for AirbusPayloadRoot {
@@ -624,16 +642,7 @@ impl<'de> ::serde::Deserialize<'de> for ListListenersResultListenersItemId {
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct ListQueuesResult {
-    pub queues: ::std::vec::Vec<ListQueuesResultQueuesItem>,
-}
-#[doc = "`ListQueuesResultQueuesItem`"]
-#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct ListQueuesResultQueuesItem {
-    pub depth: u64,
-    pub listener_count: u64,
-    pub mode: QueueMode,
-    pub name: QueueName,
+    pub queues: ::std::vec::Vec<QueueInfo>,
 }
 #[doc = "`ListenerEventParams`"]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
@@ -926,6 +935,15 @@ impl<'de> ::serde::Deserialize<'de> for PostEventResultId {
             })
     }
 }
+#[doc = "`QueueInfo`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct QueueInfo {
+    pub depth: u64,
+    pub listener_count: u64,
+    pub mode: QueueMode,
+    pub name: QueueName,
+}
 #[doc = "`QueueMode`"]
 #[derive(
     :: serde :: Deserialize,
@@ -1030,6 +1048,20 @@ impl<'de> ::serde::Deserialize<'de> for QueueName {
                 <D::Error as ::serde::de::Error>::custom(e.to_string())
             })
     }
+}
+#[doc = "`QueueReadyParams`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct QueueReadyParams {
+    pub queue: QueueName,
+}
+#[doc = "`QueueReadyResult`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct QueueReadyResult {
+    pub queue: QueueName,
+    #[doc = "Mode-aware readiness: exists for fifo/broadcast; both duplex sides attached for full-duplex"]
+    pub ready: bool,
 }
 #[doc = " Generation of default values for serde."]
 pub mod defaults {

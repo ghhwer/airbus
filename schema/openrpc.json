@@ -175,6 +175,26 @@
           "$ref": "payloads/list_listeners_result.schema.json"
         }
       }
+    },
+    {
+      "name": "queue_ready",
+      "summary": "Report whether a named queue is ready for its mode",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": true,
+          "schema": {
+            "$ref": "payloads/queue_ready_params.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "payloads/queue_ready_result.schema.json"
+        }
+      }
     }
   ]
 }

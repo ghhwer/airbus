@@ -18,6 +18,28 @@
       "type": "string",
       "enum": ["broadcast", "fifo", "full-duplex"]
     },
+    "QueueInfo": {
+      "title": "QueueInfo",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "depth", "mode", "listener_count"],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/QueueName"
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mode": {
+          "$ref": "#/$defs/QueueMode"
+        },
+        "listener_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
     "DuplexSide": {
       "title": "DuplexSide",
       "type": "string",

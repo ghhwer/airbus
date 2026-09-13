@@ -28,6 +28,8 @@ from airbus_client.payloads import (
     PingResult,
     PostEventParams,
     PostEventResult,
+    QueueReadyParams,
+    QueueReadyResult,
 )
 from airbus_client.protocol import RpcError
 
@@ -269,10 +271,28 @@ class EventListener:
 
 
 class RpcClient:
-    def __init__(self, host: str, port: int, timeout: float = 2.0) -> None:
+    def __init__(
+        self,
+        host: str | None = None,
+        port: int | None = None,
+        timeout: float = 2.0,
+    ) -> None:
+        if host is None or port is None:
+            from airbus_client.endpoint import airbus_endpoint
+
+            default_host, default_port = airbus_endpoint()
+            host = default_host if host is None else host
+            port = default_port if port is None else port
         self.host = host
         self.port = port
         self.timeout = timeout
+
+    @classmethod
+    def from_url(cls, url: str, *, timeout: float = 2.0) -> RpcClient:
+        from airbus_client.endpoint import parse_endpoint
+
+        host, port = parse_endpoint(url)
+        return cls(host, port, timeout=timeout)
 
     def _raw(self, payload: Any) -> Any | None:
         return self._raw_text(json.dumps(payload))
@@ -370,6 +390,15 @@ class RpcClient:
             "list_listeners",
             params,
             partial(proto.decode_result, "list_listeners", ListListenersResult),
+        )
+
+    def queue_ready(
+        self, params: QueueReadyParams
+    ) -> QueueReadyResult | Pending[QueueReadyResult]:
+        return self._invoke(
+            "queue_ready",
+            params,
+            partial(proto.decode_result, "queue_ready", QueueReadyResult),
         )
 
     def listen(

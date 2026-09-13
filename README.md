@@ -30,7 +30,7 @@ Layers are composed, not subclassed. `AppService` has no TCP or JSON-RPC types;
 | proto | `src/proto/rpc` | JSON-RPC **documents** (envelope) — not Protocol Buffers |
 | proto | `src/proto/payloads` | generated params/result types from `schema/payloads/` |
 | runtime | `src/runtime` | work queue, UUIDv7 |
-| app | `src/app` (`AppService`) | `ping`, `add`, `post_event`, `list_queues`, `peek_events`, `create_queue`, `attach_listener`, `detach_listener`, `list_listeners` |
+| app | `src/app` (`AppService`) | `ping`, `add`, `post_event`, `list_queues`, `peek_events`, `create_queue`, `attach_listener`, `detach_listener`, `list_listeners`, `queue_ready` |
 | composition | `src/main.rs` | parse CLI, bind methods, serve TCP (+ optional HTTP) |
 
 `RpcServer` sits in `src/io`: it feeds request bytes into `proto` and writes the
@@ -66,8 +66,9 @@ generated types.
 | `attach_listener` | Attach a client-side port listener to a queue for push event delivery |
 | `detach_listener` | Detach an attached listener |
 | `list_listeners` | List attached listeners |
+| `queue_ready` | Mode-aware readiness: exists for fifo/broadcast; both duplex sides for full-duplex |
 
-Event consumption is push-based via registered listeners (`attach_listener` / `EventListener`). Polling (`get_events`) is not supported.
+Event consumption is push-based via registered listeners (`attach_listener` / `EventListener` / `Queue.attach`). Polling (`get_events`) is not supported. Preferred application API: `Queue` handle (`create` / `attach` / `post` / `is_ready`).
 
 ### HTTP debug UI
 

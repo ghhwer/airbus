@@ -26,6 +26,14 @@ class DuplexSide(StrEnum):
     device = 'device'
 
 
+@dataclass
+class QueueInfo:
+    name: str
+    depth: int
+    mode: QueueMode
+    listener_count: int
+
+
 type AddParams = list[float]
 
 
@@ -43,16 +51,8 @@ class PostEventResult:
 
 
 @dataclass
-class Queue:
-    name: str
-    depth: int
-    mode: QueueMode
-    listener_count: int
-
-
-@dataclass
 class ListQueuesResult:
-    queues: list[Queue]
+    queues: list[QueueInfo]
 
 
 @dataclass
@@ -135,6 +135,17 @@ class Listener:
 @dataclass
 class ListListenersResult:
     listeners: list[Listener]
+
+
+@dataclass
+class QueueReadyParams:
+    queue: str
+
+
+@dataclass
+class QueueReadyResult:
+    queue: str
+    ready: bool
 
 
 @dataclass

@@ -3,9 +3,10 @@ use crate::proto::payloads::{
     AttachListenerResultListenerId, CreateQueueParams, CreateQueueResult, DetachListenerParams,
     DetachListenerResult, DetachListenerResultListenerId, DispatchStrategy, EventObject,
     ListListenersParams, ListListenersResult, ListListenersResultListenersItem,
-    ListListenersResultListenersItemId, ListQueuesResult, ListQueuesResultQueuesItem,
-    PeekEventsParams, PeekEventsResult, PeekEventsResultEventsItem, PeekEventsResultEventsItemId,
-    PingResult, PostEventParams, PostEventResult, PostEventResultId, QueueMode, QueueName,
+    ListListenersResultListenersItemId, ListQueuesResult, PeekEventsParams, PeekEventsResult,
+    PeekEventsResultEventsItem, PeekEventsResultEventsItemId, PingResult, PostEventParams,
+    PostEventResult, PostEventResultId, QueueInfo, QueueMode, QueueName, QueueReadyParams,
+    QueueReadyResult,
 };
 use crate::runtime::queue::QueueManager;
 use crate::runtime::UuidV7;
@@ -117,7 +118,7 @@ impl AppService {
             .into_iter()
             .filter_map(|(name, depth, mode, listener_count)| {
                 let name = QueueName::try_from(name).ok()?;
-                Some(ListQueuesResultQueuesItem {
+                Some(QueueInfo {
                     depth: depth as u64,
                     listener_count: listener_count as u64,
                     mode,
@@ -239,6 +240,14 @@ impl AppService {
             })
             .collect::<Result<Vec<_>, InvalidParams>>()?;
         Ok(ListListenersResult { listeners })
+    }
+
+    pub fn queue_ready(&self, params: QueueReadyParams) -> QueueReadyResult {
+        let ready = self.queue_manager.is_ready(params.queue.as_str());
+        QueueReadyResult {
+            queue: params.queue,
+            ready,
+        }
     }
 }
 

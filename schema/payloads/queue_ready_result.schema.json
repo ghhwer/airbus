@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://airbus.local/schema/payloads/queue_ready_result.schema.json",
+  "title": "QueueReadyResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["queue", "ready"],
+  "properties": {
+    "queue": {
+      "$ref": "common.schema.json#/$defs/QueueName"
+    },
+    "ready": {
+      "type": "boolean",
+      "description": "Mode-aware readiness: exists for fifo/broadcast; both duplex sides attached for full-duplex"
+    }
+  }
+}

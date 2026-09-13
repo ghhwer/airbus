@@ -4,7 +4,7 @@ use crate::app::{decode_params, AppService};
 use crate::io::rpc_server::RpcServer;
 use crate::proto::payloads::{
     AddParams, AttachListenerParams, CreateQueueParams, DetachListenerParams,
-    ListListenersParams, PeekEventsParams, PostEventParams,
+    ListListenersParams, PeekEventsParams, PostEventParams, QueueReadyParams,
 };
 use crate::proto::rpc::Error;
 use std::sync::Arc;
@@ -90,5 +90,12 @@ pub fn bind_app_service(server: &mut RpcServer, app: Arc<AppService>) {
             .list_listeners(typed)
             .map_err(|e| Error::invalid_params(e.to_string()))?;
         Ok(serde_json::to_value(result).expect("ListListenersResult serializes"))
+    });
+
+    let ready_app = Arc::clone(&app);
+    server.route("queue_ready", move |params| {
+        let typed: QueueReadyParams =
+            decode_params(&params).map_err(|e| Error::invalid_params(e.to_string()))?;
+        Ok(serde_json::to_value(ready_app.queue_ready(typed)).expect("QueueReadyResult serializes"))
     });
 }

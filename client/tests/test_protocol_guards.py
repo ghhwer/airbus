@@ -160,7 +160,7 @@ def test_generated_param_constraints_are_enforced_before_transport(monkeypatch, 
 
 def test_codec_preserves_user_nulls_and_decodes_nested_models():
     from airbus_client import protocol
-    from airbus_client.payloads import ListQueuesResult, PostEventParams, Queue, QueueMode
+    from airbus_client.payloads import ListQueuesResult, PostEventParams, QueueInfo, QueueMode
 
     value = protocol.to_wire(PostEventParams(queue="demo", event={"optional": None}))
     assert value["event"] == {"optional": None}
@@ -171,7 +171,7 @@ def test_codec_preserves_user_nulls_and_decodes_nested_models():
             "queues": [{"name": "demo", "depth": 0, "mode": "broadcast", "listener_count": 1}],
         },
     )
-    assert isinstance(result.queues[0], Queue)
+    assert isinstance(result.queues[0], QueueInfo)
     assert result.queues[0].mode is QueueMode.broadcast
 
 

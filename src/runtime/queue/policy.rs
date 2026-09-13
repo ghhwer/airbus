@@ -46,6 +46,17 @@ impl ModePolicy {
         }
     }
 
+    /// Queue already exists when this is called; mode decides further gates.
+    pub(super) fn is_ready(&self, queue: &Queue) -> bool {
+        match self {
+            Self::Broadcast | Self::Fifo { .. } => true,
+            Self::FullDuplex => {
+                queue.listener_for_side(DuplexSide::Host).is_some()
+                    && queue.listener_for_side(DuplexSide::Device).is_some()
+            }
+        }
+    }
+
     pub(super) fn publish(
         &self,
         queue: &mut Queue,

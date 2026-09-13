@@ -9,25 +9,7 @@
     "queues": {
       "type": "array",
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["name", "depth", "mode", "listener_count"],
-        "properties": {
-          "name": {
-            "$ref": "common.schema.json#/$defs/QueueName"
-          },
-          "depth": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "mode": {
-            "$ref": "common.schema.json#/$defs/QueueMode"
-          },
-          "listener_count": {
-            "type": "integer",
-            "minimum": 0
-          }
-        }
+        "$ref": "common.schema.json#/$defs/QueueInfo"
       }
     }
   }

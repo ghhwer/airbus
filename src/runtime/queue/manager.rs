@@ -72,6 +72,17 @@ impl QueueManager {
         Some(guard.mode())
     }
 
+    /// Mode-aware readiness: missing → false; otherwise delegates to the queue.
+    pub fn is_ready(&self, queue_name: &str) -> bool {
+        let Ok(queue) = self.find_queue(queue_name) else {
+            return false;
+        };
+        let Ok(q) = queue.lock() else {
+            return false;
+        };
+        q.is_ready()
+    }
+
     pub fn publish(
         &self,
         queue_name: &str,

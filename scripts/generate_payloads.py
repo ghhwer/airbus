@@ -40,6 +40,8 @@ PAYLOAD_FILES = [
     "detach_listener_result.schema.json",
     "list_listeners_params.schema.json",
     "list_listeners_result.schema.json",
+    "queue_ready_params.schema.json",
+    "queue_ready_result.schema.json",
     "listener_event_params.schema.json",
     "listener_event_result.schema.json",
 ]
@@ -71,25 +73,32 @@ def rewrite_refs_rust(node: object) -> object:
 
 
 def rewrite_refs_python(node: object, common_defs: dict) -> object:
-    """Inline common $defs for strings/objects; preserve shared enums."""
+    """Inline common $defs for strings/objects; preserve shared enums and QueueInfo."""
+    preserved = ("QueueMode", "DispatchStrategy", "DuplexSide", "QueueInfo")
     if isinstance(node, dict):
         if "$ref" in node:
             ref = node["$ref"]
-            prefix = f"{COMMON_NAME}#/$defs/"
-            if isinstance(ref, str) and ref.startswith(prefix):
-                key = ref[len(prefix) :]
-                if key in ("QueueMode", "DispatchStrategy", "DuplexSide"):
+            key: str | None = None
+            if isinstance(ref, str):
+                common_prefix = f"{COMMON_NAME}#/$defs/"
+                if ref.startswith(common_prefix):
+                    key = ref[len(common_prefix) :]
+                elif ref.startswith("#/$defs/"):
+                    key = ref[len("#/$defs/") :]
+            if key is not None:
+                if key in preserved:
                     rewritten = {**node, "$ref": f"#/$defs/{key}"}
                     return {
                         k: rewrite_refs_python(v, common_defs) if k != "$ref" else v
                         for k, v in rewritten.items()
                         if k not in ("$schema", "$id")
                     }
-                inlined = json.loads(json.dumps(common_defs[key]))  # deep copy
-                inlined.pop("title", None)
-                # Preserve sibling keywords (e.g. description) from the $ref site.
-                merged = {**inlined, **{k: v for k, v in node.items() if k != "$ref"}}
-                return rewrite_refs_python(merged, common_defs)
+                if key in common_defs:
+                    inlined = json.loads(json.dumps(common_defs[key]))  # deep copy
+                    inlined.pop("title", None)
+                    # Preserve sibling keywords (e.g. description) from the $ref site.
+                    merged = {**inlined, **{k: v for k, v in node.items() if k != "$ref"}}
+                    return rewrite_refs_python(merged, common_defs)
             return {
                 k: rewrite_refs_python(v, common_defs)
                 for k, v in node.items()
@@ -134,10 +143,10 @@ def write_python_bundle() -> Path:
     common_defs = common["$defs"]
     defs: dict = {}
     props: dict = {}
-    for enum_key in ("QueueMode", "DispatchStrategy", "DuplexSide"):
-        if enum_key in common_defs:
-            defs[enum_key] = common_defs[enum_key]
-            props[enum_key] = {"$ref": f"#/$defs/{enum_key}"}
+    for shared_key in ("QueueMode", "DispatchStrategy", "DuplexSide", "QueueInfo"):
+        if shared_key in common_defs:
+            defs[shared_key] = rewrite_refs_python(common_defs[shared_key], common_defs)
+            props[shared_key] = {"$ref": f"#/$defs/{shared_key}"}
 
     for fname in PAYLOAD_FILES:
         doc = load(fname)

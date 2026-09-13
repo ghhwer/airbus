@@ -48,6 +48,10 @@ impl Queue {
         self.policy.mode()
     }
 
+    pub fn is_ready(&self) -> bool {
+        self.policy.is_ready(self)
+    }
+
     pub fn dispatch_strategy(&self) -> DispatchStrategy {
         self.dispatch_strategy
     }
