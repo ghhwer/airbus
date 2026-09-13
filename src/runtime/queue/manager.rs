@@ -1,5 +1,6 @@
 use super::dispatcher::Dispatcher;
 use super::{DispatchStrategy, ListenerRegistration, Queue, QueueMode, QueueRegistry, SharedQueue};
+use crate::proto::payloads::DuplexSide;
 use crate::runtime::UuidV7;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -15,6 +16,7 @@ pub struct ListenerInfo {
     pub mode: QueueMode,
     pub failure_count: u64,
     pub active: bool,
+    pub side: Option<DuplexSide>,
 }
 
 /// Owns the queue registry; delivery and background scheduling live in Dispatcher.
@@ -70,11 +72,17 @@ impl QueueManager {
         Some(guard.mode())
     }
 
-    pub fn publish(&self, queue_name: &str, event_id: UuidV7, value: Value) -> Result<(), String> {
+    pub fn publish(
+        &self,
+        queue_name: &str,
+        event_id: UuidV7,
+        value: Value,
+        side: Option<DuplexSide>,
+    ) -> Result<(), String> {
         let queue = self.find_queue(queue_name)?;
         {
             let mut q = queue.lock().map_err(|_| "queue poisoned")?;
-            q.publish(event_id, value)?;
+            q.publish(event_id, value, side)?;
         }
         self.dispatcher.wake();
         Ok(())
@@ -107,6 +115,7 @@ impl QueueManager {
         result
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn attach_listener(
         &self,
         queue_name: &str,
@@ -115,6 +124,7 @@ impl QueueManager {
         port: u16,
         max_retries: u64,
         exhaustion_timeout: Duration,
+        side: Option<DuplexSide>,
     ) -> Result<(), String> {
         let queue = self.find_queue(queue_name)?;
         {
@@ -125,7 +135,8 @@ impl QueueManager {
                 port,
                 max_retries,
                 exhaustion_timeout,
-            ));
+                side,
+            ))?;
         }
         self.dispatcher.wake();
         Ok(())
@@ -169,6 +180,7 @@ impl QueueManager {
                         mode,
                         failure_count: l.failure_count,
                         active: l.failure_count == 0,
+                        side: l.side,
                     });
                 }
             }

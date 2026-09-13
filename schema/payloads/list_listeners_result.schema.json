@@ -37,6 +37,10 @@
           },
           "active": {
             "type": "boolean"
+          },
+          "side": {
+            "$ref": "common.schema.json#/$defs/DuplexSide",
+            "description": "Present for full-duplex listeners"
           }
         }
       }

@@ -1,5 +1,6 @@
 //! Try round-robin candidates until one acknowledges, bounded by the initial listener count.
-use super::{Event, Progress};
+use super::Progress;
+use super::super::policy::Event;
 use crate::io::log;
 use crate::runtime::queue::delivery::deliver_event;
 use crate::runtime::queue::SharedQueue;
@@ -28,7 +29,7 @@ pub(super) fn deliver(
         };
         if delivered {
             state.remove_event(&event.id);
-            log::info("dispatched event to worker listener");
+            log::info("dispatched event to fifo listener");
         }
         state.record_delivery(name, &candidate.id, delivered, Instant::now());
         if delivered {

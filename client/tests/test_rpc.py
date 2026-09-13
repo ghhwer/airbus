@@ -156,9 +156,9 @@ def test_create_queue_modes(rpc: RpcClient) -> None:
     assert res1_again.created is False
 
     q2 = f"work-{uuid.uuid4()}"
-    res2 = rpc.create_queue(CreateQueueParams(queue=q2, mode=QueueMode.worker))
+    res2 = rpc.create_queue(CreateQueueParams(queue=q2, mode=QueueMode.fifo))
     assert res2.queue == q2
-    assert res2.mode == QueueMode.worker
+    assert res2.mode == QueueMode.fifo
     assert res2.created is True
 
 
@@ -195,9 +195,9 @@ def test_listen_broadcast(rpc: RpcClient) -> None:
     assert len(listed_after.listeners) == 0
 
 
-def test_listen_competing_workers(rpc: RpcClient) -> None:
-    queue = f"workers-{uuid.uuid4()}"
-    rpc.create_queue(CreateQueueParams(queue=queue, mode=QueueMode.worker))
+def test_listen_competing_fifo(rpc: RpcClient) -> None:
+    queue = f"fifo-{uuid.uuid4()}"
+    rpc.create_queue(CreateQueueParams(queue=queue, mode=QueueMode.fifo))
 
     worker1_events: list[dict] = []
     worker2_events: list[dict] = []
@@ -268,7 +268,7 @@ def test_failed_listener_start_cleans_up(rpc: RpcClient) -> None:
 
 def test_server_listener_eviction_on_dead_port(rpc: RpcClient) -> None:
     queue = f"exhaust-{uuid.uuid4()}"
-    rpc.create_queue(CreateQueueParams(queue=queue, mode=QueueMode.worker))
+    rpc.create_queue(CreateQueueParams(queue=queue, mode=QueueMode.fifo))
 
     # Bind and close socket to obtain an unused port
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

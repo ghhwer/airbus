@@ -165,6 +165,7 @@ fn post_params(queue: &str, event: Value) -> PostEventParams {
     PostEventParams {
         queue: queue_name(queue).unwrap(),
         event: event_object(event).unwrap(),
+        side: None,
     }
 }
 
@@ -330,8 +331,12 @@ fn queue_manager_isolates_queues() {
     manager
         .create_queue("b", QueueMode::Broadcast, DispatchStrategy::RoundRobin)
         .unwrap();
-    manager.publish("a", generate_uuidv7(), json!(1)).unwrap();
-    manager.publish("b", generate_uuidv7(), json!(2)).unwrap();
+    manager
+        .publish("a", generate_uuidv7(), json!(1), None)
+        .unwrap();
+    manager
+        .publish("b", generate_uuidv7(), json!(2), None)
+        .unwrap();
     let from_a = manager.peek("a", 8);
     assert_eq!(from_a.len(), 1);
     assert_eq!(from_a[0].1, 1);
@@ -350,12 +355,14 @@ fn queue_manager_list_and_peek() {
         .create_queue("other", QueueMode::Broadcast, DispatchStrategy::RoundRobin)
         .unwrap();
     let id = generate_uuidv7();
-    manager.publish("jobs", id, json!({"n": 1})).unwrap();
     manager
-        .publish("jobs", generate_uuidv7(), json!({"n": 2}))
+        .publish("jobs", id, json!({"n": 1}), None)
         .unwrap();
     manager
-        .publish("other", generate_uuidv7(), json!(true))
+        .publish("jobs", generate_uuidv7(), json!({"n": 2}), None)
+        .unwrap();
+    manager
+        .publish("other", generate_uuidv7(), json!(true), None)
         .unwrap();
 
     let listed = manager.list();
@@ -533,19 +540,19 @@ fn test_create_queue_lifecycle() {
     let res = app
         .create_queue(create_params(
             "tasks",
-            Some(QueueMode::Worker),
+            Some(QueueMode::Fifo),
             Some(DispatchStrategy::RoundRobin),
         ))
         .unwrap();
     assert_eq!(res.queue.as_str(), "tasks");
-    assert_eq!(res.mode, QueueMode::Worker);
+    assert_eq!(res.mode, QueueMode::Fifo);
     assert!(res.created);
 
     // Idempotent re-creation returns created: false
     let res2 = app
         .create_queue(create_params(
             "tasks",
-            Some(QueueMode::Worker),
+            Some(QueueMode::Fifo),
             Some(DispatchStrategy::RoundRobin),
         ))
         .unwrap();
@@ -556,7 +563,7 @@ fn test_create_queue_lifecycle() {
         .create_queue(create_params("tasks", None, None))
         .unwrap();
     assert!(!existing.created);
-    assert_eq!(existing.mode, QueueMode::Worker);
+    assert_eq!(existing.mode, QueueMode::Fifo);
     assert_eq!(
         app.list_queues()
             .queues
@@ -604,26 +611,32 @@ fn broadcast_detach_releases_pending_delivery_without_adding_late_listeners() {
     let second = generate_uuidv7();
     let late = generate_uuidv7();
     for id in [first, second] {
-        queue.attach_listener(ListenerRegistration::new(
-            id,
+        queue
+            .attach_listener(ListenerRegistration::new(
+                id,
+                "127.0.0.1".into(),
+                12345,
+                3,
+                Duration::from_secs(10),
+                None,
+            ))
+            .unwrap();
+    }
+    let event_id = generate_uuidv7();
+    queue.publish(event_id, json!({"n": 1}), None).unwrap();
+    assert_eq!(queue.broadcast_listeners(event_id).len(), 2);
+    queue.acknowledge_broadcast(&event_id, &first);
+    assert_eq!(queue.depth(), 1);
+    queue
+        .attach_listener(ListenerRegistration::new(
+            late,
             "127.0.0.1".into(),
             12345,
             3,
             Duration::from_secs(10),
-        ));
-    }
-    let event_id = generate_uuidv7();
-    queue.publish(event_id, json!({"n": 1})).unwrap();
-    assert_eq!(queue.broadcast_listeners(event_id).len(), 2);
-    queue.acknowledge_broadcast(&event_id, &first);
-    assert_eq!(queue.depth(), 1);
-    queue.attach_listener(ListenerRegistration::new(
-        late,
-        "127.0.0.1".into(),
-        12345,
-        3,
-        Duration::from_secs(10),
-    ));
+            None,
+        ))
+        .unwrap();
     let pending = queue.broadcast_listeners(event_id);
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].id, second);
@@ -638,15 +651,18 @@ fn broadcast_detach_without_acknowledgment_retains_event_for_future_listeners() 
 
     let mut queue = Queue::new(QueueMode::Broadcast, DispatchStrategy::RoundRobin);
     let dead = generate_uuidv7();
-    queue.attach_listener(ListenerRegistration::new(
-        dead,
-        "127.0.0.1".into(),
-        12345,
-        3,
-        Duration::from_secs(10),
-    ));
+    queue
+        .attach_listener(ListenerRegistration::new(
+            dead,
+            "127.0.0.1".into(),
+            12345,
+            3,
+            Duration::from_secs(10),
+            None,
+        ))
+        .unwrap();
     let event_id = generate_uuidv7();
-    queue.publish(event_id, json!({"n": 1})).unwrap();
+    queue.publish(event_id, json!({"n": 1}), None).unwrap();
     assert_eq!(queue.broadcast_listeners(event_id).len(), 1);
 
     // Dead listener is evicted/detached without acknowledging
@@ -658,13 +674,16 @@ fn broadcast_detach_without_acknowledgment_retains_event_for_future_listeners() 
 
     // When a new listener attaches, the event is delivered to it
     let healthy = generate_uuidv7();
-    queue.attach_listener(ListenerRegistration::new(
-        healthy,
-        "127.0.0.1".into(),
-        12346,
-        3,
-        Duration::from_secs(10),
-    ));
+    queue
+        .attach_listener(ListenerRegistration::new(
+            healthy,
+            "127.0.0.1".into(),
+            12346,
+            3,
+            Duration::from_secs(10),
+            None,
+        ))
+        .unwrap();
     let recipients = queue.broadcast_listeners(event_id);
     assert_eq!(recipients.len(), 1);
     assert_eq!(recipients[0].id, healthy);
@@ -768,11 +787,11 @@ fn test_broadcast_delivery() {
 }
 
 #[test]
-fn test_worker_round_robin_delivery() {
+fn test_fifo_round_robin_delivery() {
     let app = AppService::new();
     app.create_queue(create_params(
         "workers",
-        Some(QueueMode::Worker),
+        Some(QueueMode::Fifo),
         Some(DispatchStrategy::RoundRobin),
     ))
     .unwrap();
@@ -831,7 +850,7 @@ fn test_worker_round_robin_delivery() {
 #[test]
 fn test_client_unreachable_exhaustion() {
     let app = AppService::new();
-    app.create_queue(create_params("exhaust", Some(QueueMode::Worker), None))
+    app.create_queue(create_params("exhaust", Some(QueueMode::Fifo), None))
         .unwrap();
 
     // Find an unused port and immediately close it
@@ -876,4 +895,163 @@ fn test_client_unreachable_exhaustion() {
     }
 
     assert!(evicted, "Dead listener should be evicted upon exhaustion");
+}
+
+#[test]
+fn full_duplex_requires_side_and_cross_routes() {
+    use airbus::proto::payloads::DuplexSide;
+    use airbus::runtime::queue::{ListenerRegistration, Queue};
+    use std::time::Duration;
+
+    let mut queue = Queue::new(QueueMode::FullDuplex, DispatchStrategy::RoundRobin);
+    assert!(queue
+        .attach_listener(ListenerRegistration::new(
+            generate_uuidv7(),
+            "127.0.0.1".into(),
+            1,
+            3,
+            Duration::from_secs(10),
+            None,
+        ))
+        .is_err());
+
+    let host_id = generate_uuidv7();
+    queue
+        .attach_listener(ListenerRegistration::new(
+            host_id,
+            "127.0.0.1".into(),
+            1,
+            3,
+            Duration::from_secs(10),
+            Some(DuplexSide::Host),
+        ))
+        .unwrap();
+    assert!(queue
+        .attach_listener(ListenerRegistration::new(
+            generate_uuidv7(),
+            "127.0.0.1".into(),
+            2,
+            3,
+            Duration::from_secs(10),
+            Some(DuplexSide::Host),
+        ))
+        .is_err());
+
+    queue
+        .attach_listener(ListenerRegistration::new(
+            generate_uuidv7(),
+            "127.0.0.1".into(),
+            3,
+            3,
+            Duration::from_secs(10),
+            Some(DuplexSide::Device),
+        ))
+        .unwrap();
+
+    let event_id = generate_uuidv7();
+    queue
+        .publish(event_id, json!({"ping": true}), Some(DuplexSide::Host))
+        .unwrap();
+    let ready = queue.first_duplex_event_ready().unwrap();
+    assert_eq!(ready.0, event_id);
+    assert_eq!(ready.2, DuplexSide::Device);
+}
+
+#[test]
+fn full_duplex_app_service_rejects_invalid_side_usage() {
+    let app = AppService::new();
+    app.create_queue(create_params("chan", Some(QueueMode::FullDuplex), None))
+        .unwrap();
+    // round_robin is allowed on full-duplex (both sides can still attach).
+    app.create_queue(create_params(
+        "chan2",
+        Some(QueueMode::FullDuplex),
+        Some(DispatchStrategy::RoundRobin),
+    ))
+    .unwrap();
+
+    let bad_attach: AttachListenerParams = decode_params(&json!({
+        "queue": "chan",
+        "port": 12345,
+    }))
+    .unwrap();
+    assert!(app.attach_listener(bad_attach).is_err());
+
+    let bad_post = post_params("chan", json!({"n": 1}));
+    assert!(app.post_event(bad_post).is_err());
+
+    app.create_queue(create_params("plain", Some(QueueMode::Broadcast), None))
+        .unwrap();
+    let sided: AttachListenerParams = decode_params(&json!({
+        "queue": "plain",
+        "port": 12345,
+        "side": "host",
+    }))
+    .unwrap();
+    assert!(app.attach_listener(sided).is_err());
+}
+
+#[test]
+fn fifo_single_node_rejects_second_listener() {
+    use airbus::runtime::queue::{ListenerRegistration, Queue};
+    use std::time::Duration;
+
+    let mut queue = Queue::new(QueueMode::Fifo, DispatchStrategy::SingleNode);
+    queue
+        .attach_listener(ListenerRegistration::new(
+            generate_uuidv7(),
+            "127.0.0.1".into(),
+            1,
+            3,
+            Duration::from_secs(10),
+            None,
+        ))
+        .unwrap();
+    assert!(queue
+        .attach_listener(ListenerRegistration::new(
+            generate_uuidv7(),
+            "127.0.0.1".into(),
+            2,
+            3,
+            Duration::from_secs(10),
+            None,
+        ))
+        .is_err());
+}
+
+#[test]
+fn full_duplex_buffers_until_peer_attaches() {
+    use airbus::proto::payloads::DuplexSide;
+    use airbus::runtime::queue::{ListenerRegistration, Queue};
+    use std::time::Duration;
+
+    let mut queue = Queue::new(QueueMode::FullDuplex, DispatchStrategy::RoundRobin);
+    queue
+        .attach_listener(ListenerRegistration::new(
+            generate_uuidv7(),
+            "127.0.0.1".into(),
+            1,
+            3,
+            Duration::from_secs(10),
+            Some(DuplexSide::Host),
+        ))
+        .unwrap();
+    let event_id = generate_uuidv7();
+    queue
+        .publish(event_id, json!({"hello": true}), Some(DuplexSide::Host))
+        .unwrap();
+    assert!(queue.first_duplex_event_ready().is_none());
+    assert_eq!(queue.depth(), 1);
+
+    queue
+        .attach_listener(ListenerRegistration::new(
+            generate_uuidv7(),
+            "127.0.0.1".into(),
+            2,
+            3,
+            Duration::from_secs(10),
+            Some(DuplexSide::Device),
+        ))
+        .unwrap();
+    assert_eq!(queue.first_duplex_event_ready().unwrap().0, event_id);
 }

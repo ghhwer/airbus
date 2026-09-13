@@ -24,6 +24,10 @@
     "max_retries": {
       "type": "integer",
       "minimum": 0
+    },
+    "side": {
+      "$ref": "common.schema.json#/$defs/DuplexSide",
+      "description": "Listener side for full-duplex queues; required when mode is full-duplex, rejected otherwise"
     }
   }
 }

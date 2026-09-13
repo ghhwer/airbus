@@ -1,0 +1,150 @@
+//! Mode-specific publish / attach / delivery planning, chosen at queue creation.
+use super::queue::opposite_side;
+use super::{DispatchStrategy, ListenerRegistration, Queue, QueueMode};
+use crate::proto::payloads::DuplexSide;
+use crate::runtime::UuidV7;
+use serde_json::Value;
+
+pub(super) struct Event {
+    pub(super) id: UuidV7,
+    pub(super) value: Value,
+}
+
+pub(super) enum Recipients {
+    Broadcast(Vec<ListenerRegistration>),
+    /// fifo (+ round_robin / single_node): compete for each event.
+    Fifo { max_attempts: usize },
+    Duplex { target_side: DuplexSide },
+}
+
+pub(super) struct DeliveryPlan {
+    pub(super) event: Event,
+    pub(super) recipients: Recipients,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ModePolicy {
+    Broadcast,
+    Fifo { strategy: DispatchStrategy },
+    FullDuplex,
+}
+
+impl ModePolicy {
+    pub(super) fn new(mode: QueueMode, strategy: DispatchStrategy) -> Self {
+        match mode {
+            QueueMode::Broadcast => Self::Broadcast,
+            QueueMode::Fifo => Self::Fifo { strategy },
+            QueueMode::FullDuplex => Self::FullDuplex,
+        }
+    }
+
+    pub(super) fn mode(&self) -> QueueMode {
+        match self {
+            Self::Broadcast => QueueMode::Broadcast,
+            Self::Fifo { .. } => QueueMode::Fifo,
+            Self::FullDuplex => QueueMode::FullDuplex,
+        }
+    }
+
+    pub(super) fn publish(
+        &self,
+        queue: &mut Queue,
+        event_id: UuidV7,
+        value: Value,
+        side: Option<DuplexSide>,
+    ) -> Result<(), String> {
+        match self {
+            Self::Broadcast | Self::Fifo { .. } => {
+                if side.is_some() {
+                    return Err(
+                        "side is only valid when posting to a full-duplex queue".to_string(),
+                    );
+                }
+                queue.insert_event(event_id, value)
+            }
+            Self::FullDuplex => {
+                let publisher_side = side.ok_or_else(|| {
+                    "side is required when posting to a full-duplex queue".to_string()
+                })?;
+                queue.insert_event(event_id, value)?;
+                queue.set_duplex_target(event_id, opposite_side(publisher_side));
+                Ok(())
+            }
+        }
+    }
+
+    pub(super) fn attach(
+        &self,
+        queue: &mut Queue,
+        listener: ListenerRegistration,
+    ) -> Result<(), String> {
+        match self {
+            Self::FullDuplex => {
+                let side = listener.side.ok_or_else(|| {
+                    "side is required when attaching to a full-duplex queue".to_string()
+                })?;
+                // One listener per side. round_robin still allows both sides to attach
+                // (multi-endpoint duplex); single_node also means one per side here.
+                if queue.listeners().iter().any(|l| l.side == Some(side)) {
+                    return Err(format!("full-duplex side '{side}' already has a listener"));
+                }
+                if queue.listener_count() >= 2 {
+                    return Err("full-duplex channel already has two listeners".to_string());
+                }
+            }
+            Self::Fifo { strategy } => {
+                if listener.side.is_some() {
+                    return Err(
+                        "side is only valid when attaching to a full-duplex queue".to_string(),
+                    );
+                }
+                if *strategy == DispatchStrategy::SingleNode && queue.listener_count() > 0 {
+                    return Err("fifo single_node queue already has a listener".to_string());
+                }
+            }
+            Self::Broadcast => {
+                if listener.side.is_some() {
+                    return Err(
+                        "side is only valid when attaching to a full-duplex queue".to_string(),
+                    );
+                }
+            }
+        }
+        queue.push_listener(listener);
+        Ok(())
+    }
+
+    pub(super) fn prepare_delivery(&self, queue: &mut Queue) -> Option<DeliveryPlan> {
+        match self {
+            Self::Broadcast => {
+                if queue.listener_count() == 0 {
+                    return None;
+                }
+                let (id, value) = queue.first_event()?;
+                Some(DeliveryPlan {
+                    event: Event { id, value },
+                    recipients: Recipients::Broadcast(queue.broadcast_listeners(id)),
+                })
+            }
+            Self::Fifo { .. } => {
+                if queue.listener_count() == 0 {
+                    return None;
+                }
+                let (id, value) = queue.first_event()?;
+                Some(DeliveryPlan {
+                    event: Event { id, value },
+                    recipients: Recipients::Fifo {
+                        max_attempts: queue.listener_count(),
+                    },
+                })
+            }
+            Self::FullDuplex => {
+                let (id, value, target_side) = queue.first_duplex_event_ready()?;
+                Some(DeliveryPlan {
+                    event: Event { id, value },
+                    recipients: Recipients::Duplex { target_side },
+                })
+            }
+        }
+    }
+}

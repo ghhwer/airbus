@@ -75,6 +75,7 @@ pub enum AirbusPayloadRoot {
     QueueName(QueueName),
     EventObject(EventObject),
     QueueMode(QueueMode),
+    DuplexSide(DuplexSide),
     DispatchStrategy(DispatchStrategy),
     PingResult(PingResult),
     AddParams(AddParams),
@@ -108,6 +109,11 @@ impl ::std::convert::From<EventObject> for AirbusPayloadRoot {
 impl ::std::convert::From<QueueMode> for AirbusPayloadRoot {
     fn from(value: QueueMode) -> Self {
         Self::QueueMode(value)
+    }
+}
+impl ::std::convert::From<DuplexSide> for AirbusPayloadRoot {
+    fn from(value: DuplexSide) -> Self {
+        Self::DuplexSide(value)
     }
 }
 impl ::std::convert::From<DispatchStrategy> for AirbusPayloadRoot {
@@ -217,6 +223,9 @@ pub struct AttachListenerParams {
     pub max_retries: ::std::option::Option<u64>,
     pub port: ::std::num::NonZeroU64,
     pub queue: QueueName,
+    #[doc = "Listener side for full-duplex queues; required when mode is full-duplex, rejected otherwise"]
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub side: ::std::option::Option<DuplexSide>,
 }
 #[doc = "`AttachListenerResult`"]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
@@ -423,11 +432,14 @@ impl<'de> ::serde::Deserialize<'de> for DetachListenerResultListenerId {
 pub enum DispatchStrategy {
     #[serde(rename = "round_robin")]
     RoundRobin,
+    #[serde(rename = "single_node")]
+    SingleNode,
 }
 impl ::std::fmt::Display for DispatchStrategy {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match *self {
             Self::RoundRobin => f.write_str("round_robin"),
+            Self::SingleNode => f.write_str("single_node"),
         }
     }
 }
@@ -436,6 +448,7 @@ impl ::std::str::FromStr for DispatchStrategy {
     fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
         match value {
             "round_robin" => Ok(Self::RoundRobin),
+            "single_node" => Ok(Self::SingleNode),
             _ => Err("invalid value".into()),
         }
     }
@@ -447,6 +460,57 @@ impl ::std::convert::TryFrom<&str> for DispatchStrategy {
     }
 }
 impl ::std::convert::TryFrom<::std::string::String> for DispatchStrategy {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`DuplexSide`"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum DuplexSide {
+    #[serde(rename = "host")]
+    Host,
+    #[serde(rename = "device")]
+    Device,
+}
+impl ::std::fmt::Display for DuplexSide {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Host => f.write_str("host"),
+            Self::Device => f.write_str("device"),
+        }
+    }
+}
+impl ::std::str::FromStr for DuplexSide {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "host" => Ok(Self::Host),
+            "device" => Ok(Self::Device),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for DuplexSide {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for DuplexSide {
     type Error = self::error::ConversionError;
     fn try_from(
         value: ::std::string::String,
@@ -502,6 +566,9 @@ pub struct ListListenersResultListenersItem {
     pub mode: QueueMode,
     pub port: ::std::num::NonZeroU64,
     pub queue: QueueName,
+    #[doc = "Present for full-duplex listeners"]
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub side: ::std::option::Option<DuplexSide>,
 }
 #[doc = "`ListListenersResultListenersItemId`"]
 #[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -798,6 +865,9 @@ impl ::std::str::FromStr for PingResult {
 pub struct PostEventParams {
     pub event: EventObject,
     pub queue: QueueName,
+    #[doc = "Publisher side for full-duplex queues; required when mode is full-duplex, rejected otherwise"]
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub side: ::std::option::Option<DuplexSide>,
 }
 #[doc = "`PostEventResult`"]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
@@ -872,14 +942,17 @@ impl<'de> ::serde::Deserialize<'de> for PostEventResultId {
 pub enum QueueMode {
     #[serde(rename = "broadcast")]
     Broadcast,
-    #[serde(rename = "worker")]
-    Worker,
+    #[serde(rename = "fifo")]
+    Fifo,
+    #[serde(rename = "full-duplex")]
+    FullDuplex,
 }
 impl ::std::fmt::Display for QueueMode {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match *self {
             Self::Broadcast => f.write_str("broadcast"),
-            Self::Worker => f.write_str("worker"),
+            Self::Fifo => f.write_str("fifo"),
+            Self::FullDuplex => f.write_str("full-duplex"),
         }
     }
 }
@@ -888,7 +961,8 @@ impl ::std::str::FromStr for QueueMode {
     fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
         match value {
             "broadcast" => Ok(Self::Broadcast),
-            "worker" => Ok(Self::Worker),
+            "fifo" => Ok(Self::Fifo),
+            "full-duplex" => Ok(Self::FullDuplex),
             _ => Err("invalid value".into()),
         }
     }

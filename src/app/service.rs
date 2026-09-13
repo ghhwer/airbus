@@ -2,11 +2,10 @@ use crate::proto::payloads::{
     AddParams, AddResult, AttachListenerParams, AttachListenerResult,
     AttachListenerResultListenerId, CreateQueueParams, CreateQueueResult, DetachListenerParams,
     DetachListenerResult, DetachListenerResultListenerId, DispatchStrategy, EventObject,
-    ListListenersParams, ListListenersResult,
-    ListListenersResultListenersItem, ListListenersResultListenersItemId, ListQueuesResult,
-    ListQueuesResultQueuesItem, PeekEventsParams, PeekEventsResult, PeekEventsResultEventsItem,
-    PeekEventsResultEventsItemId, PingResult, PostEventParams, PostEventResult, PostEventResultId,
-    QueueMode, QueueName,
+    ListListenersParams, ListListenersResult, ListListenersResultListenersItem,
+    ListListenersResultListenersItemId, ListQueuesResult, ListQueuesResultQueuesItem,
+    PeekEventsParams, PeekEventsResult, PeekEventsResultEventsItem, PeekEventsResultEventsItemId,
+    PingResult, PostEventParams, PostEventResult, PostEventResultId, QueueMode, QueueName,
 };
 use crate::runtime::queue::QueueManager;
 use crate::runtime::UuidV7;
@@ -65,6 +64,8 @@ impl AppService {
         params: CreateQueueParams,
     ) -> Result<CreateQueueResult, InvalidParams> {
         let mode = params.mode.unwrap_or(QueueMode::Broadcast);
+        // Default dispatch is round_robin (multi-listener). single_node is for fifo
+        // exclusivity; full-duplex always allows one listener per side either way.
         let strategy = params
             .dispatch_strategy
             .unwrap_or(DispatchStrategy::RoundRobin);
@@ -90,10 +91,18 @@ impl AppService {
         let id = UuidV7::generate();
         let event = Value::Object(params.event.0.clone());
         self.queue_manager
-            .publish(params.queue.as_str(), id, event)
-            .map_err(|_| {
-                InvalidParams::new(format!("Queue '{}' does not exist", params.queue.as_str()))
+            .publish(params.queue.as_str(), id, event, params.side)
+            .map_err(|e| {
+                if e.starts_with("Queue not found:") {
+                    InvalidParams::new(format!(
+                        "Queue '{}' does not exist",
+                        params.queue.as_str()
+                    ))
+                } else {
+                    InvalidParams::new(e)
+                }
             })?;
+
         Ok(PostEventResult {
             id: PostEventResultId::try_from(id.to_string())
                 .map_err(|e| InvalidParams::new(e.to_string()))?,
@@ -158,9 +167,17 @@ impl AppService {
                 port,
                 max_retries,
                 exhaustion_timeout,
+                params.side,
             )
-            .map_err(|_| {
-                InvalidParams::new(format!("Queue '{}' does not exist", params.queue.as_str()))
+            .map_err(|e| {
+                if e.starts_with("Queue not found:") {
+                    InvalidParams::new(format!(
+                        "Queue '{}' does not exist",
+                        params.queue.as_str()
+                    ))
+                } else {
+                    InvalidParams::new(e)
+                }
             })?;
 
         let id_typed = AttachListenerResultListenerId::try_from(listener_id.to_string().as_str())
@@ -217,6 +234,7 @@ impl AppService {
                     mode: item.mode,
                     port,
                     queue,
+                    side: item.side,
                 })
             })
             .collect::<Result<Vec<_>, InvalidParams>>()?;

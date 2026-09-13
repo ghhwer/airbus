@@ -1,19 +1,30 @@
+use super::policy::{DeliveryPlan, ModePolicy};
 use super::ListenerRegistration;
 use crate::io::log;
-pub use crate::proto::payloads::{DispatchStrategy, QueueMode};
+pub use crate::proto::payloads::{DispatchStrategy, DuplexSide, QueueMode};
 use crate::runtime::UuidV7;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
+pub fn opposite_side(side: DuplexSide) -> DuplexSide {
+    match side {
+        DuplexSide::Host => DuplexSide::Device,
+        DuplexSide::Device => DuplexSide::Host,
+    }
+}
+
 pub struct Queue {
     /// UUIDv7 keys are time-ordered, so iteration is FIFO by publish time.
     events: BTreeMap<UuidV7, Value>,
+    /// Full-duplex: target listener side for each buffered event.
+    duplex_targets: BTreeMap<UuidV7, DuplexSide>,
     /// Recipients are fixed when broadcast delivery first starts.
     pending_broadcasts: BTreeMap<UuidV7, BTreeSet<UuidV7>>,
     /// Tracks broadcast events that received at least one acknowledgment.
     acknowledged_events: BTreeSet<UuidV7>,
-    mode: QueueMode,
+    policy: ModePolicy,
+    /// Retained from create_queue for introspection; fifo exclusivity lives on policy.
     dispatch_strategy: DispatchStrategy,
     listeners: Vec<ListenerRegistration>,
     round_robin_cursor: usize,
@@ -23,9 +34,10 @@ impl Queue {
     pub fn new(mode: QueueMode, dispatch_strategy: DispatchStrategy) -> Self {
         Self {
             events: BTreeMap::new(),
+            duplex_targets: BTreeMap::new(),
             pending_broadcasts: BTreeMap::new(),
             acknowledged_events: BTreeSet::new(),
-            mode,
+            policy: ModePolicy::new(mode, dispatch_strategy),
             dispatch_strategy,
             listeners: Vec::new(),
             round_robin_cursor: 0,
@@ -33,20 +45,38 @@ impl Queue {
     }
 
     pub fn mode(&self) -> QueueMode {
-        self.mode
+        self.policy.mode()
     }
 
     pub fn dispatch_strategy(&self) -> DispatchStrategy {
         self.dispatch_strategy
     }
 
-    pub fn publish(&mut self, event_id: UuidV7, value: Value) -> Result<(), String> {
+    pub fn publish(
+        &mut self,
+        event_id: UuidV7,
+        value: Value,
+        side: Option<DuplexSide>,
+    ) -> Result<(), String> {
+        let policy = self.policy;
+        policy.publish(self, event_id, value, side)
+    }
+
+    pub(super) fn insert_event(&mut self, event_id: UuidV7, value: Value) -> Result<(), String> {
         if self.events.contains_key(&event_id) {
             return Err("Event ID already exists".to_string());
         }
         self.events.insert(event_id, value);
         log::info("published event");
         Ok(())
+    }
+
+    pub(super) fn set_duplex_target(&mut self, event_id: UuidV7, target: DuplexSide) {
+        self.duplex_targets.insert(event_id, target);
+    }
+
+    pub(super) fn push_listener(&mut self, listener: ListenerRegistration) {
+        self.listeners.push(listener);
     }
 
     pub fn depth(&self) -> usize {
@@ -59,6 +89,10 @@ impl Queue {
 
     pub fn listeners(&self) -> &[ListenerRegistration] {
         &self.listeners
+    }
+
+    pub fn listener_for_side(&self, side: DuplexSide) -> Option<&ListenerRegistration> {
+        self.listeners.iter().find(|l| l.side == Some(side))
     }
 
     pub(super) fn record_delivery(
@@ -80,8 +114,9 @@ impl Queue {
         }
     }
 
-    pub fn attach_listener(&mut self, listener: ListenerRegistration) {
-        self.listeners.push(listener);
+    pub fn attach_listener(&mut self, listener: ListenerRegistration) -> Result<(), String> {
+        let policy = self.policy;
+        policy.attach(self, listener)
     }
 
     pub fn detach_listener(&mut self, listener_id: &UuidV7) -> bool {
@@ -128,9 +163,22 @@ impl Queue {
         self.events.iter().next().map(|(&id, v)| (id, v.clone()))
     }
 
+    pub fn first_duplex_event_ready(&self) -> Option<(UuidV7, Value, DuplexSide)> {
+        for (&id, value) in &self.events {
+            let Some(&target) = self.duplex_targets.get(&id) else {
+                continue;
+            };
+            if self.listener_for_side(target).is_some() {
+                return Some((id, value.clone(), target));
+            }
+        }
+        None
+    }
+
     pub fn remove_event(&mut self, event_id: &UuidV7) -> Option<Value> {
         self.pending_broadcasts.remove(event_id);
         self.acknowledged_events.remove(event_id);
+        self.duplex_targets.remove(event_id);
         self.events.remove(event_id)
     }
 
@@ -163,5 +211,10 @@ impl Queue {
         let idx = self.round_robin_cursor % self.listeners.len();
         self.round_robin_cursor = (idx + 1) % self.listeners.len();
         Some(self.listeners[idx].clone())
+    }
+
+    pub(super) fn prepare_delivery(&mut self) -> Option<DeliveryPlan> {
+        let policy = self.policy;
+        policy.prepare_delivery(self)
     }
 }

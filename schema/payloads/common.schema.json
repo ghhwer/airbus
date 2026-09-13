@@ -16,12 +16,17 @@
     "QueueMode": {
       "title": "QueueMode",
       "type": "string",
-      "enum": ["broadcast", "worker"]
+      "enum": ["broadcast", "fifo", "full-duplex"]
+    },
+    "DuplexSide": {
+      "title": "DuplexSide",
+      "type": "string",
+      "enum": ["host", "device"]
     },
     "DispatchStrategy": {
       "title": "DispatchStrategy",
       "type": "string",
-      "enum": ["round_robin"]
+      "enum": ["round_robin", "single_node"]
     }
   }
 }

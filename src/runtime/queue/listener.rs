@@ -1,4 +1,5 @@
 //! Listener registration and shared retry/exhaustion rules.
+use crate::proto::payloads::DuplexSide;
 use crate::runtime::UuidV7;
 use std::time::{Duration, Instant};
 
@@ -11,6 +12,8 @@ pub struct ListenerRegistration {
     pub unreachable_since: Option<Instant>,
     pub max_retries: u64,
     pub exhaustion_timeout: Duration,
+    /// Set for full-duplex listeners (`host` / `device`).
+    pub side: Option<DuplexSide>,
 }
 
 impl ListenerRegistration {
@@ -20,6 +23,7 @@ impl ListenerRegistration {
         port: u16,
         max_retries: u64,
         exhaustion_timeout: Duration,
+        side: Option<DuplexSide>,
     ) -> Self {
         Self {
             id,
@@ -29,6 +33,7 @@ impl ListenerRegistration {
             unreachable_since: None,
             max_retries,
             exhaustion_timeout,
+            side,
         }
     }
 
@@ -57,6 +62,7 @@ mod tests {
             12345,
             2,
             Duration::from_secs(10),
+            None,
         )
     }
 

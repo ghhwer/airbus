@@ -1,4 +1,5 @@
 from airbus_client.binary import run_airbus
+from airbus_client.bus import BusChannel
 from airbus_client.payloads import (
     AddParams,
     AttachListenerParams,
@@ -8,6 +9,7 @@ from airbus_client.payloads import (
     DetachListenerParams,
     DetachListenerResult,
     DispatchStrategy,
+    DuplexSide,
     Listener,
     ListListenersParams,
     ListListenersResult,
@@ -26,11 +28,13 @@ __all__ = [
     "AddParams",
     "AttachListenerParams",
     "AttachListenerResult",
+    "BusChannel",
     "CreateQueueParams",
     "CreateQueueResult",
     "DetachListenerParams",
     "DetachListenerResult",
     "DispatchStrategy",
+    "DuplexSide",
     "EventListener",
     "ListListenersParams",
     "ListListenersResult",

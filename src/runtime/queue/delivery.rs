@@ -94,6 +94,7 @@ mod tests {
                 port,
                 3,
                 Duration::from_secs(2),
+                None,
             );
             let result = deliver_event(
                 &listener,

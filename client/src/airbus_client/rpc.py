@@ -19,6 +19,7 @@ from airbus_client.payloads import (
     CreateQueueResult,
     DetachListenerParams,
     DetachListenerResult,
+    DuplexSide,
     ListListenersParams,
     ListListenersResult,
     ListQueuesResult,
@@ -151,6 +152,7 @@ class EventListener:
         exhaustion_timeout_ms: int | None = None,
         max_retries: int | None = None,
         max_events: int | None = None,
+        side: DuplexSide | None = None,
     ) -> None:
         self._client = client
         self._queue = queue
@@ -159,6 +161,7 @@ class EventListener:
         self._exhaustion_timeout_ms = exhaustion_timeout_ms
         self._max_retries = max_retries
         self._max_events = max_events
+        self._side = side
     
         self._server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -230,6 +233,7 @@ class EventListener:
                     host=self._host,
                     exhaustion_timeout_ms=self._exhaustion_timeout_ms,
                     max_retries=self._max_retries,
+                    side=self._side,
                 )
             )
             assert isinstance(result, AttachListenerResult)
@@ -376,6 +380,8 @@ class RpcClient:
         host: str = "127.0.0.1",
         exhaustion_timeout_ms: int | None = None,
         max_retries: int | None = None,
+        side: DuplexSide | None = None,
+        max_events: int | None = None,
     ) -> EventListener:
         cb = on_event if on_event is not None else (lambda e: None)
         return EventListener(
@@ -385,6 +391,8 @@ class RpcClient:
             host=host,
             exhaustion_timeout_ms=exhaustion_timeout_ms,
             max_retries=max_retries,
+            side=side,
+            max_events=max_events,
         )
 
     def _invoke(

@@ -11,6 +11,10 @@
     },
     "event": {
       "$ref": "common.schema.json#/$defs/EventObject"
+    },
+    "side": {
+      "$ref": "common.schema.json#/$defs/DuplexSide",
+      "description": "Publisher side for full-duplex queues; required when mode is full-duplex, rejected otherwise"
     }
   }
 }

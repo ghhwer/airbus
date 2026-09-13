@@ -51,12 +51,19 @@ def load(name: str) -> dict:
 
 def rewrite_refs_rust(node: object) -> object:
     if isinstance(node, dict):
-        if set(node.keys()) == {"$ref"}:
+        if "$ref" in node:
             ref = node["$ref"]
             prefix = f"{COMMON_NAME}#/$defs/"
-            if ref.startswith(prefix):
-                return {"$ref": f"#/$defs/{ref[len(prefix) :]}"}
-            return node
+            if isinstance(ref, str) and ref.startswith(prefix):
+                rewritten = {**node, "$ref": f"#/$defs/{ref[len(prefix) :]}"}
+                return {
+                    k: rewrite_refs_rust(v) if k != "$ref" else v
+                    for k, v in rewritten.items()
+                    if k not in ("$schema", "$id")
+                }
+            return {
+                k: rewrite_refs_rust(v) for k, v in node.items() if k not in ("$schema", "$id")
+            }
         return {k: rewrite_refs_rust(v) for k, v in node.items() if k not in ("$schema", "$id")}
     if isinstance(node, list):
         return [rewrite_refs_rust(x) for x in node]
@@ -66,17 +73,28 @@ def rewrite_refs_rust(node: object) -> object:
 def rewrite_refs_python(node: object, common_defs: dict) -> object:
     """Inline common $defs for strings/objects; preserve shared enums."""
     if isinstance(node, dict):
-        if set(node.keys()) == {"$ref"}:
+        if "$ref" in node:
             ref = node["$ref"]
             prefix = f"{COMMON_NAME}#/$defs/"
-            if ref.startswith(prefix):
+            if isinstance(ref, str) and ref.startswith(prefix):
                 key = ref[len(prefix) :]
-                if key in ("QueueMode", "DispatchStrategy"):
-                    return {"$ref": f"#/$defs/{key}"}
+                if key in ("QueueMode", "DispatchStrategy", "DuplexSide"):
+                    rewritten = {**node, "$ref": f"#/$defs/{key}"}
+                    return {
+                        k: rewrite_refs_python(v, common_defs) if k != "$ref" else v
+                        for k, v in rewritten.items()
+                        if k not in ("$schema", "$id")
+                    }
                 inlined = json.loads(json.dumps(common_defs[key]))  # deep copy
                 inlined.pop("title", None)
-                return rewrite_refs_python(inlined, common_defs)
-            return node
+                # Preserve sibling keywords (e.g. description) from the $ref site.
+                merged = {**inlined, **{k: v for k, v in node.items() if k != "$ref"}}
+                return rewrite_refs_python(merged, common_defs)
+            return {
+                k: rewrite_refs_python(v, common_defs)
+                for k, v in node.items()
+                if k not in ("$schema", "$id")
+            }
         return {
             k: rewrite_refs_python(v, common_defs)
             for k, v in node.items()
@@ -116,7 +134,7 @@ def write_python_bundle() -> Path:
     common_defs = common["$defs"]
     defs: dict = {}
     props: dict = {}
-    for enum_key in ("QueueMode", "DispatchStrategy"):
+    for enum_key in ("QueueMode", "DispatchStrategy", "DuplexSide"):
         if enum_key in common_defs:
             defs[enum_key] = common_defs[enum_key]
             props[enum_key] = {"$ref": f"#/$defs/{enum_key}"}

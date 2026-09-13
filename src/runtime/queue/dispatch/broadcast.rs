@@ -1,5 +1,6 @@
 //! Deliver to every outstanding recipient; retain individual acknowledgments across retries.
-use super::{Event, Progress};
+use super::Progress;
+use super::super::policy::Event;
 use crate::runtime::queue::delivery::deliver_event;
 use crate::runtime::queue::{ListenerRegistration, SharedQueue};
 use std::time::Instant;

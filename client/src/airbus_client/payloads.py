@@ -12,11 +12,18 @@ type AddResult = float
 
 class QueueMode(StrEnum):
     broadcast = 'broadcast'
-    worker = 'worker'
+    fifo = 'fifo'
+    full_duplex = 'full-duplex'
 
 
 class DispatchStrategy(StrEnum):
     round_robin = 'round_robin'
+    single_node = 'single_node'
+
+
+class DuplexSide(StrEnum):
+    host = 'host'
+    device = 'device'
 
 
 type AddParams = list[float]
@@ -26,6 +33,7 @@ type AddParams = list[float]
 class PostEventParams:
     queue: str
     event: dict[str, Any]
+    side: DuplexSide | None = None
 
 
 @dataclass
@@ -86,6 +94,7 @@ class AttachListenerParams:
     host: str | None = None
     exhaustion_timeout_ms: int | None = None
     max_retries: int | None = None
+    side: DuplexSide | None = None
 
 
 @dataclass
@@ -120,6 +129,7 @@ class Listener:
     mode: QueueMode
     failure_count: int
     active: bool
+    side: DuplexSide | None = None
 
 
 @dataclass
