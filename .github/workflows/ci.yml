@@ -1,0 +1,38 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - run: cargo clippy -- -D warnings
+      - run: cargo test
+      - run: node tests/protocol.test.mjs
+
+  client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+      - run: make build
+      - run: uv sync --all-packages
+      - run: uv run python scripts/check_protocol_boundaries.py
+      - run: uv run python scripts/generate_payloads.py --check
+      - run: cd client && AIRBUS_BIN="$GITHUB_WORKSPACE/out/airbus" uv run pytest
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t airbus:ci .

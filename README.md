@@ -1,124 +1,104 @@
 # Airbus
 
-Rust binary plus a Python test client. For dedicated system documentation, see [docs/airbus/](../docs/airbus/overview.md).
+JSON-RPC event bus: a Rust daemon plus a Python client (`airbus-client`).
+
+This repository is the **canonical home** for Airbus (daemon, schema, client, debug UI,
+and container image). Other projects consume the published client and/or run the
+container — they do not need to vendor this tree.
 
 ```
-airbus/
-  schema/              # payload SOT (JSON Schema + OpenRPC catalog)
-  scripts/             # codegen (generate_payloads.py)
-  resources/ui/        # static debug UI (served via --http --resources)
-  src/
-    app/               # application: methods + composition root (main.rs)
-    io/                # sockets, HTTP, byte serve loop, RpcServer adapter
-    proto/             # JSON-RPC documents + generated payload types
-    runtime/           # work queue, UUIDv7
-  tests/               # Rust unit tests (in-process, no TCP)
-  client/              # Python integration client (uv, src-layout)
-    src/airbus_client/
-    tests/             # process + TCP against out/airbus
-  out/                 # release binary copy for the Python client
-  target/              # Cargo build artifacts
+.
+├── schema/              # payload SOT (JSON Schema + OpenRPC catalog)
+├── scripts/             # codegen + protocol boundary checks
+├── resources/ui/        # static debug UI (--http --resources)
+├── src/                 # Rust daemon (app / io / proto / runtime)
+├── tests/               # Rust unit + JS protocol tests
+├── client/              # Python airbus-client (publishable package)
+├── docs/                # architecture, protocol, queues
+├── Dockerfile           # daemon + UI image
+└── out/                 # release binary copy (local builds)
 ```
 
-Layers are composed, not subclassed. `AppService` has no TCP or JSON-RPC types;
-`main` wires it onto `RpcServer`.
+Docs: [overview](docs/overview.md) · [architecture](docs/architecture.md) ·
+[protocol](docs/protocol.md) · [queues](docs/queues-and-dispatch.md)
 
-| Layer | Path | Role |
-| ----- | ---- | ---- |
-| schema | `schema/` | JSON Schema payload contracts + OpenRPC method catalog |
-| io | `src/io` | sockets, `serve_tcp`, optional HTTP static + `POST /rpc` |
-| proto | `src/proto/rpc` | JSON-RPC **documents** (envelope) — not Protocol Buffers |
-| proto | `src/proto/payloads` | generated params/result types from `schema/payloads/` |
-| runtime | `src/runtime` | work queue, UUIDv7 |
-| app | `src/app` (`AppService`) | `ping`, `add`, `post_event`, `list_queues`, `peek_events`, `create_queue`, `attach_listener`, `detach_listener`, `list_listeners`, `queue_ready` |
-| composition | `src/main.rs` | parse CLI, bind methods, serve TCP (+ optional HTTP) |
-
-`RpcServer` sits in `src/io`: it feeds request bytes into `proto` and writes the
-response bytes back. Logging (`src/io/log`) is stderr I/O.
-
-### Payload schemas (Client ↔ Server contract)
-
-Method **params** and **results** are defined under `schema/payloads/*.schema.json`.
-`schema/openrpc.json` names the methods and `$ref`s those schemas; it does **not**
-define the JSON-RPC envelope (`jsonrpc` / `id` / `error`).
+## Quick start (local)
 
 ```bash
-make generate   # typify → src/proto/payloads.rs
-                # datamodel-codegen → client/.../payloads.py
-```
-
-Requires `cargo-typify` (`cargo install cargo-typify`) and `make setup` (pulls
-`datamodel-code-generator` as a client dev dependency). Generated sources are
-committed; re-run `make generate` after editing schemas.
-
-JSON values use `serde_json::Value` where schemas leave payloads unconstrained
-(opaque event objects). Structured methods deserialize through the
-generated types.
-
-### Queue methods
-
-| Method | Behavior |
-| ------ | -------- |
-| `post_event` | Publish `{ queue, event }` → `{ id, queue }` |
-| `list_queues` | `{ queues: [{ name, depth, mode, listener_count }] }` |
-| `peek_events` | Non-destructive `{ queue, count? }` → `{ queue, events: [{ id, event }] }` |
-| `create_queue` | Configure and create an event queue |
-| `attach_listener` | Attach a client-side port listener to a queue for push event delivery |
-| `detach_listener` | Detach an attached listener |
-| `list_listeners` | List attached listeners |
-| `queue_ready` | Mode-aware readiness: exists for fifo/broadcast; both duplex sides for full-duplex |
-
-Event consumption is push-based via registered listeners (`attach_listener` / `EventListener` / `Queue.attach`). Polling (`get_events`) is not supported. Preferred application API: `Queue` handle (`create` / `attach` / `post` / `is_ready`).
-
-### HTTP debug UI
-
-Optional HTTP listener serves the static UI from disk (not embedded) and the same
-JSON-RPC methods at `POST /rpc` (browser calls JSON-RPC directly — no REST).
-
-```bash
-make run
-# TCP  127.0.0.1:9097
-# HTTP http://127.0.0.1:9098/   (UI)
-#      POST http://127.0.0.1:9098/rpc
+make setup    # uv workspace (airbus-client + codegen deps)
+make build    # → out/airbus
+make run      # TCP 0.0.0.0:9097 + HTTP UI :9098
+make test
 ```
 
 ```text
 airbus --listen [host:]port [--http [host:]port --resources DIR]
 ```
 
-`--http` requires `--resources` (docroot; typically `resources/ui`). Root `make up`
-passes `AIRBUS_HTTP_URL` (default `127.0.0.1:9098`) and `AIRBUS_RESOURCES`.
-
-### Local playground
-
-Repo-root `_playground/` is **gitignored**. Use Python notebooks there against a live
-Airbus (TCP `AIRBUS_URL`, default `127.0.0.1:9097`):
+## Python client (PyPI)
 
 ```bash
-# with make up / make -C airbus run already running
-uv run --with jupyter --with ipykernel jupyter lab _playground
+pip install airbus-client
 ```
 
-Start from `_playground/airbus_queue.ipynb`; put throwaway event JSON under
-`_playground/payloads/`. HTTP UI remains at http://127.0.0.1:9098/.
+```python
+from airbus_client import RpcClient
+
+client = RpcClient()  # AIRBUS_URL or AIRBUS_HOST / AIRBUS_PORT
+assert client.ping() == "pong"
+```
+
+Publish (maintainers), after tagging `v*`:
 
 ```bash
-make                   # cargo build --release → out/airbus
-make run               # TCP + HTTP UI
-make setup             # uv sync the Python client
-make client            # start a server, ping over TCP
-make test-unit         # cargo test
-make test-integration  # Python vs the binary over TCP
-make test              # unit, then integration
+# Trusted Publisher / uv publish from CI (see .github/workflows/publish-client.yml)
+# or locally:
+make publish-client   # requires UV_PUBLISH_TOKEN (or equivalent)
 ```
 
-Unit tests call `AppService`, `rpc::Server`, and `RpcServer` helpers in-process.
-Integration tests spawn `out/airbus` and speak JSON-RPC over TCP.
+## Container
 
-The client locates the binary from `AIRBUS_BIN`, or falls back to `out/airbus`.
+```bash
+make docker
+make docker-run
+# or
+docker compose up --build
+```
 
-- `--listen [host:]port`: TCP JSON-RPC (required). Use port `0` for an ephemeral port.
-  The bound address is logged as `listening on 127.0.0.1:PORT`.
-- `--http [host:]port` + `--resources DIR`: HTTP static UI + `POST /rpc`.
+Published images (on version tags) go to `ghcr.io/ghhwer/airbus`.
 
-Each TCP connection is one JSON-RPC document: client writes, half-closes, reads the response.
+| Port | Role |
+| ---- | ---- |
+| `9097` | TCP JSON-RPC |
+| `9098` | HTTP debug UI + `POST /rpc` |
+
+## Environment
+
+| Variable | Default | Purpose |
+| -------- | ------- | ------- |
+| `AIRBUS_URL` | `127.0.0.1:9097` | Client TCP endpoint (`host:port`) |
+| `AIRBUS_HOST` / `AIRBUS_PORT` | `127.0.0.1` / `9097` | Client fallbacks |
+| `AIRBUS_BIN` | `out/airbus` | Path used by tests / helpers |
+
+## Schema / codegen
+
+```bash
+make generate   # typify → src/proto/payloads.rs
+                # datamodel-codegen → client/.../payloads.py
+```
+
+Requires `cargo-typify` (`cargo install cargo-typify --version 0.8.0`) and `make setup`.
+Generated sources are committed; re-run after schema edits.
+
+## Queue methods (summary)
+
+| Method | Behavior |
+| ------ | -------- |
+| `post_event` | Publish `{ queue, event }` → `{ id, queue }` |
+| `list_queues` | Queue inventory |
+| `peek_events` | Non-destructive peek |
+| `create_queue` | Configure / create a queue |
+| `attach_listener` / `detach_listener` / `list_listeners` | Push delivery |
+| `queue_ready` | Mode-aware readiness |
+
+Preferred application API: `Queue` (`create` / `attach` / `post` / `is_ready`).

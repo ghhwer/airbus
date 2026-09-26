@@ -1,0 +1,270 @@
+# Airbus Protocol & Contracts
+
+This document specifies the wire protocol, envelope framing, schema Single Source of
+Truth (SOT), code-generation pipeline, and enforced protocol boundaries governing Airbus.
+
+## Wire Protocol: JSON-RPC 2.0
+
+Airbus implements the [JSON-RPC 2.0 Specification](https://www.jsonrpc.org/specification)
+across all supported transports.
+
+### Transport Framing
+
+| Transport | Framing Mechanism | Typical Endpoint |
+| --------- | ----------------- | ---------------- |
+| **TCP** | Newline-delimited JSON (`\n`) | `127.0.0.1:9097` |
+| **HTTP** | HTTP POST body (`application/json`) | `POST http://127.0.0.1:9098/rpc` |
+
+On TCP streams, requests and responses are single-line JSON objects terminated by `\n` (`0x0A`). Multiple requests can be pipelined over a persistent TCP connection.
+
+### Request Envelope
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "post_event",
+  "params": {
+    "queue": "tasks",
+    "event": {
+      "action": "build",
+      "target": "frontend"
+    }
+  }
+}
+```
+
+- `jsonrpc`: Must be exactly `"2.0"`.
+- `id`: Unique correlation identifier (integer or string). Notifications (`id` omitted or `null`) do not receive a reply unless specified by the method receiver.
+- `method`: Name of the RPC method to invoke.
+- `params`: Structured arguments (object or array depending on the method's `paramStructure`).
+
+### Success Response Envelope
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "id": "0191eb70-65e1-7d1a-8c43-982189d2d001",
+    "queue": "tasks"
+  }
+}
+```
+
+### Error Response Envelope
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "error": {
+    "code": -32602,
+    "message": "Queue 'tasks' does not exist"
+  }
+}
+```
+
+**Mutual Exclusivity**: A valid response envelope contains either `result` or `error`, never both.
+
+### Standard Error Codes
+
+| Code | Constant | Meaning |
+| ---- | -------- | ------- |
+| `-32700` | `PARSE_ERROR` | Invalid JSON received by the server |
+| `-32600` | `INVALID_REQUEST` | The JSON sent is not a valid JSON-RPC 2.0 request |
+| `-32601` | `METHOD_NOT_FOUND` | The method does not exist or is not available |
+| `-32602` | `INVALID_PARAMS` | Invalid method parameter(s) |
+| `-32603` | `INTERNAL_ERROR` | Internal JSON-RPC / server error |
+
+---
+
+## Enforced Protocol Boundaries
+
+As documented in `AGENTS.md` and enforced by `make lint-protocol`, Airbus maintains strict boundaries between wire documents, generated payloads, and application logic.
+
+### The Boundary Rules
+
+1. **Schema Single Source of Truth**:
+   - Method definitions live in `schema/openrpc.json`.
+   - Parameter and result payload schemas live in `schema/payloads/*.schema.json`.
+2. **Never Edit Generated Code**:
+   - Rust payload types in `src/proto/payloads.rs` are generated via `typify`.
+   - Python payload types in `client/src/airbus_client/payloads.py` are generated via `datamodel-code-generator`.
+   - Never hand-edit these files or duplicate their fields in per-method codecs.
+3. **Envelope Handling Isolation**:
+   - Envelope construction and inspection (`jsonrpc`, `method`, `params`, `result`, `error`) belong **only** in:
+     - Rust: `src/proto/rpc.rs`
+     - Python: `airbus_client/protocol.py`
+     - JavaScript: `resources/ui/protocol.js`
+   - Application, transport, and runtime code must not directly manipulate wire fields.
+4. **Validation Before Acknowledgment**:
+   - Incoming envelopes (version, correlation ID, exclusivity) and payloads must be validated before callbacks or acknowledgment.
+5. **Freshness Checks**:
+   - `make lint-protocol` (and `make lint`) regenerates payloads in a temporary directory and verifies that committed files match the schema exactly.
+
+### Code Generation Workflow
+
+Whenever you modify any schema in `schema/`:
+
+```bash
+make generate
+```
+
+This updates `payloads.rs` and `payloads.py`. Verify with:
+
+```bash
+make lint-protocol
+```
+
+---
+
+## Complete Method Catalog
+
+### 1. `ping`
+Liveness check verifying server responsiveness.
+- **Parameters**: None
+- **Result**: String (`"pong"`)
+
+```json
+--> {"jsonrpc": "2.0", "id": 1, "method": "ping"}
+<-- {"jsonrpc": "2.0", "id": 1, "result": "pong"}
+```
+
+### 2. `add`
+Arithmetic sanity verification (smoke test).
+- **Parameters**: Array of two numbers (`[a, b]`)
+- **Result**: Number (`a + b`)
+
+```json
+--> {"jsonrpc": "2.0", "id": 2, "method": "add", "params": [17, 25]}
+<-- {"jsonrpc": "2.0", "id": 2, "result": 42}
+```
+
+### 3. `create_queue`
+Creates and configures a named event queue.
+- **Parameters**:
+  - `queue` (string, required): Queue name (1–64 characters).
+  - `mode` (string, optional): `"broadcast"`, `"fifo"`, or `"full-duplex"`. Default: `"broadcast"`.
+  - `dispatch_strategy` (string, optional): `"round_robin"` or `"single_node"`. Default: `"round_robin"`.
+- **Result**:
+  - `queue` (string): Name of the queue.
+  - `mode` (string): Effective mode.
+  - `created` (boolean): `true` if newly created, `false` if already existed.
+
+```json
+--> {"jsonrpc": "2.0", "id": 3, "method": "create_queue", "params": {"queue": "notifications", "mode": "broadcast"}}
+<-- {"jsonrpc": "2.0", "id": 3, "result": {"queue": "notifications", "mode": "broadcast", "created": true}}
+```
+
+### 4. `post_event`
+Publishes an arbitrary JSON payload onto a named queue.
+- **Parameters**:
+  - `queue` (string, required): Name of target queue.
+  - `event` (object, required): Arbitrary JSON object payload.
+- **Result**:
+  - `id` (string): Generated UUIDv7 identifier for the event.
+  - `queue` (string): Name of the queue.
+
+```json
+--> {"jsonrpc": "2.0", "id": 4, "method": "post_event", "params": {"queue": "notifications", "event": {"level": "info", "msg": "Sync complete"}}}
+<-- {"jsonrpc": "2.0", "id": 4, "result": {"id": "0191eb73-8a39-7f41-a6cd-2895b6c3109a", "queue": "notifications"}}
+```
+
+### 5. `peek_events`
+Non-destructively inspects events sitting on a queue without consuming or removing them.
+- **Parameters**:
+  - `queue` (string, required): Name of queue.
+  - `count` (integer, optional): Maximum number of events to peek.
+- **Result**:
+  - `queue` (string): Name of queue.
+  - `events` (array): Array of objects `{"id": string, "event": object}`.
+
+```json
+--> {"jsonrpc": "2.0", "id": 5, "method": "peek_events", "params": {"queue": "notifications", "count": 2}}
+<-- {"jsonrpc": "2.0", "id": 5, "result": {"queue": "notifications", "events": [{"id": "0191eb73-8a39-7f41-a6cd-2895b6c3109a", "event": {"level": "info", "msg": "Sync complete"}}]}}
+```
+
+### 6. `list_queues`
+Lists all known queues and their operational statistics.
+- **Parameters**: None
+- **Result**:
+  - `queues` (array): Array of `{ name, depth, mode, listener_count }`.
+
+```json
+--> {"jsonrpc": "2.0", "id": 6, "method": "list_queues"}
+<-- {"jsonrpc": "2.0", "id": 6, "result": {"queues": [{"name": "notifications", "depth": 1, "mode": "broadcast", "listener_count": 2}]}}
+```
+
+### 7. `attach_listener`
+Registers an external client-side port listener to receive events dispatched from a queue.
+- **Parameters**:
+  - `queue` (string, required): Queue name to subscribe to.
+  - `host` (string, optional): Listener host IP. Default: `"127.0.0.1"`.
+  - `port` (integer, required): TCP port where the listener is waiting for `on_event` calls.
+  - `max_retries` (integer, optional): Delivery retry limit before marking delivery failed. Default: `3`.
+  - `exhaustion_timeout_ms` (integer, optional): Timeout budget in milliseconds. Default: `10000`.
+- **Result**:
+  - `listener_id` (string): Generated UUIDv7 listener handle.
+  - `queue` (string): Queue attached to.
+  - `status` (string): `"attached"`.
+
+```json
+--> {"jsonrpc": "2.0", "id": 7, "method": "attach_listener", "params": {"queue": "notifications", "port": 19001}}
+<-- {"jsonrpc": "2.0", "id": 7, "result": {"listener_id": "0191eb74-3298-7c88-9d22-10f763ab21e0", "queue": "notifications", "status": "attached"}}
+```
+
+### 8. `detach_listener`
+Unregisters an attached listener by its ID.
+- **Parameters**:
+  - `listener_id` (string, required): UUIDv7 of the listener.
+- **Result**:
+  - `listener_id` (string): ID of listener.
+  - `detached` (boolean): `true` if detached, `false` if not found.
+
+```json
+--> {"jsonrpc": "2.0", "id": 8, "method": "detach_listener", "params": {"listener_id": "0191eb74-3298-7c88-9d22-10f763ab21e0"}}
+<-- {"jsonrpc": "2.0", "id": 8, "result": {"listener_id": "0191eb74-3298-7c88-9d22-10f763ab21e0", "detached": true}}
+```
+
+### 9. `list_listeners`
+Lists attached listeners and their operational health.
+- **Parameters**:
+  - `queue` (string, optional): Filter by queue name.
+- **Result**:
+  - `listeners` (array): Array of `{ id, queue, host, port, active, failure_count }`.
+
+```json
+--> {"jsonrpc": "2.0", "id": 9, "method": "list_listeners", "params": {"queue": "notifications"}}
+<-- {"jsonrpc": "2.0", "id": 9, "result": {"listeners": [{"id": "0191eb74-3298-7c88-9d22-10f763ab21e0", "queue": "notifications", "host": "127.0.0.1", "port": 19001, "active": true, "failure_count": 0}]}}
+```
+
+### 10. `queue_ready`
+Reports whether a named queue is ready for its mode (missing → `ready: false`, not an error).
+- **Parameters**:
+  - `queue` (string, required): Queue name.
+- **Result**:
+  - `queue` (string): Queue name.
+  - `ready` (boolean): Exists for `fifo`/`broadcast`; both duplex sides attached for `full-duplex`.
+
+```json
+--> {"jsonrpc": "2.0", "id": 10, "method": "queue_ready", "params": {"queue": "notifications"}}
+<-- {"jsonrpc": "2.0", "id": 10, "result": {"queue": "notifications", "ready": true}}
+```
+
+### 11. `on_event` (Listener Callback)
+Inverted RPC call: **Airbus acts as the client and invokes `on_event` on the attached listener**.
+- **Tagged**: `"x-receiver": "listener"` in `openrpc.json`.
+- **Parameters**:
+  - `queue` (string, required): Queue delivering the event.
+  - `event_id` (string, required): UUIDv7 of the event.
+  - `event` (object, required): The original published event payload.
+  - `attempt` (integer, optional): Current delivery attempt number (1-indexed).
+- **Result**:
+  - `status` (string): `"acknowledged"` or `"rejected"`.
+  - `error` (string, optional): Reason if rejected.
+
+```json
+--> {"jsonrpc": "2.0", "id": 100, "method": "on_event", "params": {"queue": "notifications", "event_id": "0191eb73-8a39-7f41-a6cd-2895b6c3109a", "event": {"level": "info", "msg": "Sync complete"}, "attempt": 1}}
+<-- {"jsonrpc": "2.0", "id": 100, "result": {"status": "acknowledged"}}
+```

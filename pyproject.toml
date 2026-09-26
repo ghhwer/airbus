@@ -1,0 +1,18 @@
+[project]
+name = "airbus"
+version = "0.1.0"
+description = "JSON-RPC event bus (Rust daemon) + Python airbus-client"
+requires-python = ">=3.13"
+dependencies = []
+
+[tool.uv]
+package = false
+default-groups = ["dev"]
+
+[tool.uv.workspace]
+members = ["client"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11.0",
+]

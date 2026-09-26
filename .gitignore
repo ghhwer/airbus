@@ -2,3 +2,23 @@ out/
 target/
 schema/payloads/bundle.schema.json
 schema/payloads/python_bundle.schema.json
+
+# Python
+__pycache__/
+*.py[oc]
+*.egg-info/
+.venv/
+dist/
+build/
+wheels/
+.pytest_cache/
+.ruff_cache/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Docker
+*.tar

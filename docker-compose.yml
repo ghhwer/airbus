@@ -1,0 +1,8 @@
+services:
+  airbus:
+    build: .
+    image: airbus:local
+    ports:
+      - "9097:9097"
+      - "9098:9098"
+    restart: unless-stopped

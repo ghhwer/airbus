@@ -1,0 +1,21 @@
+name: publish-client
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  pypi:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+      - run: uv sync --all-packages
+      - working-directory: client
+        run: uv build
+      - working-directory: client
+        run: uv publish
