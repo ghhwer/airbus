@@ -1,0 +1,27 @@
+{
+  "name": "airbus-client",
+  "version": "0.0.0",
+  "description": "Airbus JSON-RPC event bus C++ client (PlatformIO package of client-cpp)",
+  "keywords": ["airbus", "json-rpc", "queue", "event-bus"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ghhwer/airbus.git"
+  },
+  "authors": [
+    {
+      "name": "Airbus contributors",
+      "url": "https://github.com/ghhwer/airbus"
+    }
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/ghhwer/airbus",
+  "frameworks": "*",
+  "platforms": "*",
+  "headers": "airbus/client.hpp",
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src",
+    "flags": ["-Ithird_party", "-std=gnu++17"],
+    "libArchive": false
+  }
+}
