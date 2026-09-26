@@ -65,8 +65,12 @@ impl AppService {
         params: CreateQueueParams,
     ) -> Result<CreateQueueResult, InvalidParams> {
         let mode = params.mode.unwrap_or(QueueMode::Broadcast);
-        // Default dispatch is round_robin (multi-listener). single_node is for fifo
-        // exclusivity; full-duplex always allows one listener per side either way.
+        // dispatch_strategy is fifo-only. broadcast/full-duplex ignore it; reject if set.
+        if params.dispatch_strategy.is_some() && mode != QueueMode::Fifo {
+            return Err(InvalidParams::new(
+                "dispatch_strategy is only valid when mode is fifo",
+            ));
+        }
         let strategy = params
             .dispatch_strategy
             .unwrap_or(DispatchStrategy::RoundRobin);

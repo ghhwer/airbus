@@ -148,10 +148,13 @@ Arithmetic sanity verification (smoke test).
 
 ### 3. `create_queue`
 Creates and configures a named event queue.
+
+`mode` and `dispatch_strategy` are different fields: **mode** chooses routing semantics; **strategy** only configures how a **fifo** queue selects among listeners. See [Queues & Dispatch](queues-and-dispatch.md).
+
 - **Parameters**:
   - `queue` (string, required): Queue name (1–64 characters).
   - `mode` (string, optional): `"broadcast"`, `"fifo"`, or `"full-duplex"`. Default: `"broadcast"`.
-  - `dispatch_strategy` (string, optional): `"round_robin"` or `"single_node"`. Default: `"round_robin"`.
+  - `dispatch_strategy` (string, optional): `"round_robin"` or `"single_node"`. **Only valid when `mode` is `"fifo"`** (default `"round_robin"` if omitted on fifo). Setting it for `"broadcast"`, `"full-duplex"`, or omitted mode (defaults to broadcast) returns invalid params: `dispatch_strategy is only valid when mode is fifo`.
 - **Result**:
   - `queue` (string): Name of the queue.
   - `mode` (string): Effective mode.
@@ -160,6 +163,12 @@ Creates and configures a named event queue.
 ```json
 --> {"jsonrpc": "2.0", "id": 3, "method": "create_queue", "params": {"queue": "notifications", "mode": "broadcast"}}
 <-- {"jsonrpc": "2.0", "id": 3, "result": {"queue": "notifications", "mode": "broadcast", "created": true}}
+
+--> {"jsonrpc": "2.0", "id": 3, "method": "create_queue", "params": {"queue": "jobs", "mode": "fifo", "dispatch_strategy": "single_node"}}
+<-- {"jsonrpc": "2.0", "id": 3, "result": {"queue": "jobs", "mode": "fifo", "created": true}}
+
+--> {"jsonrpc": "2.0", "id": 3, "method": "create_queue", "params": {"queue": "chan", "mode": "full-duplex"}}
+<-- {"jsonrpc": "2.0", "id": 3, "result": {"queue": "chan", "mode": "full-duplex", "created": true}}
 ```
 
 ### 4. `post_event`
@@ -167,6 +176,7 @@ Publishes an arbitrary JSON payload onto a named queue.
 - **Parameters**:
   - `queue` (string, required): Name of target queue.
   - `event` (object, required): Arbitrary JSON object payload.
+  - `side` (string, optional): `"host"` or `"device"`. **Required** for `full-duplex` queues (publisher side); **rejected** for `broadcast` / `fifo`.
 - **Result**:
   - `id` (string): Generated UUIDv7 identifier for the event.
   - `queue` (string): Name of the queue.
@@ -174,6 +184,9 @@ Publishes an arbitrary JSON payload onto a named queue.
 ```json
 --> {"jsonrpc": "2.0", "id": 4, "method": "post_event", "params": {"queue": "notifications", "event": {"level": "info", "msg": "Sync complete"}}}
 <-- {"jsonrpc": "2.0", "id": 4, "result": {"id": "0191eb73-8a39-7f41-a6cd-2895b6c3109a", "queue": "notifications"}}
+
+--> {"jsonrpc": "2.0", "id": 4, "method": "post_event", "params": {"queue": "chan", "event": {"msg": "hi"}, "side": "host"}}
+<-- {"jsonrpc": "2.0", "id": 4, "result": {"id": "0191eb73-8a39-7f41-a6cd-2895b6c3109a", "queue": "chan"}}
 ```
 
 ### 5. `peek_events`
@@ -209,6 +222,7 @@ Registers an external client-side port listener to receive events dispatched fro
   - `port` (integer, required): TCP port where the listener is waiting for `on_event` calls.
   - `max_retries` (integer, optional): Delivery retry limit before marking delivery failed. Default: `3`.
   - `exhaustion_timeout_ms` (integer, optional): Timeout budget in milliseconds. Default: `10000`.
+  - `side` (string, optional): `"host"` or `"device"`. **Required** for `full-duplex` (one listener per side); **rejected** for `broadcast` / `fifo`. On `fifo` + `single_node`, a second attach is rejected.
 - **Result**:
   - `listener_id` (string): Generated UUIDv7 listener handle.
   - `queue` (string): Queue attached to.
@@ -217,6 +231,9 @@ Registers an external client-side port listener to receive events dispatched fro
 ```json
 --> {"jsonrpc": "2.0", "id": 7, "method": "attach_listener", "params": {"queue": "notifications", "port": 19001}}
 <-- {"jsonrpc": "2.0", "id": 7, "result": {"listener_id": "0191eb74-3298-7c88-9d22-10f763ab21e0", "queue": "notifications", "status": "attached"}}
+
+--> {"jsonrpc": "2.0", "id": 7, "method": "attach_listener", "params": {"queue": "chan", "port": 19001, "side": "host"}}
+<-- {"jsonrpc": "2.0", "id": 7, "result": {"listener_id": "0191eb74-3298-7c88-9d22-10f763ab21e0", "queue": "chan", "status": "attached"}}
 ```
 
 ### 8. `detach_listener`
@@ -237,7 +254,7 @@ Lists attached listeners and their operational health.
 - **Parameters**:
   - `queue` (string, optional): Filter by queue name.
 - **Result**:
-  - `listeners` (array): Array of `{ id, queue, host, port, active, failure_count }`.
+  - `listeners` (array): Array of `{ id, queue, host, port, active, failure_count, side? }` (`side` present for full-duplex listeners).
 
 ```json
 --> {"jsonrpc": "2.0", "id": 9, "method": "list_listeners", "params": {"queue": "notifications"}}

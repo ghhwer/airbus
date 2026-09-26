@@ -80,9 +80,10 @@ Each method validates parameters, delegates state manipulation to `QueueManager`
 - `queue.rs`: `Queue` maintains the in-memory ring/buffer of events, tracking depth, sequence numbers, and unconsumed event state.
 - `queue/delivery.rs`: Tracks inflight event deliveries, acknowledgment states, retry counters, and expiration deadlines.
 - `queue/dispatcher.rs`: Runs background event dispatch loops that route newly published events to available listeners according to queue configuration.
-- `queue/dispatch/`: Submodules implementing queue delivery strategies:
-  - `broadcast.rs`: Broadcast delivery ensuring every attached listener receives each event.
-  - `worker.rs`: Worker delivery distributing events among listeners using `round_robin` or `random` strategies.
+- `queue/dispatch/`: Submodules implementing per-mode delivery:
+  - `broadcast.rs`: Fan-out — every attached listener receives each event.
+  - `worker.rs`: Fifo competing-consumer delivery (listener selection / exclusivity come from `dispatch_strategy` at create: `round_robin` or `single_node`).
+  - `duplex.rs`: Full-duplex cross-route to the opposite `host`/`device` side.
 - `queue/listener.rs`: Manages listener network state, TCP connection pooling, and callback RPC execution (`on_event`).
 - `uuidv7.rs`: Custom implementation of UUIDv7 (RFC 9562) providing 128-bit time-ordered identifiers with millisecond timestamp precision and cryptographic randomness.
 

@@ -959,17 +959,50 @@ fn full_duplex_requires_side_and_cross_routes() {
 }
 
 #[test]
+fn create_queue_rejects_dispatch_strategy_unless_fifo() {
+    let app = AppService::new();
+
+    let err = app
+        .create_queue(create_params(
+            "bcast",
+            Some(QueueMode::Broadcast),
+            Some(DispatchStrategy::RoundRobin),
+        ))
+        .unwrap_err();
+    assert!(err.to_string().contains("dispatch_strategy"));
+
+    let err = app
+        .create_queue(create_params(
+            "duplex",
+            Some(QueueMode::FullDuplex),
+            Some(DispatchStrategy::SingleNode),
+        ))
+        .unwrap_err();
+    assert!(err.to_string().contains("dispatch_strategy"));
+
+    // Default mode is broadcast — strategy alone is still invalid.
+    let err = app
+        .create_queue(create_params(
+            "default-mode",
+            None,
+            Some(DispatchStrategy::RoundRobin),
+        ))
+        .unwrap_err();
+    assert!(err.to_string().contains("dispatch_strategy"));
+
+    app.create_queue(create_params(
+        "jobs",
+        Some(QueueMode::Fifo),
+        Some(DispatchStrategy::SingleNode),
+    ))
+    .unwrap();
+}
+
+#[test]
 fn full_duplex_app_service_rejects_invalid_side_usage() {
     let app = AppService::new();
     app.create_queue(create_params("chan", Some(QueueMode::FullDuplex), None))
         .unwrap();
-    // round_robin is allowed on full-duplex (both sides can still attach).
-    app.create_queue(create_params(
-        "chan2",
-        Some(QueueMode::FullDuplex),
-        Some(DispatchStrategy::RoundRobin),
-    ))
-    .unwrap();
 
     let bad_attach: AttachListenerParams = decode_params(&json!({
         "queue": "chan",

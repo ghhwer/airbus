@@ -94,8 +94,7 @@ impl ModePolicy {
                 let side = listener.side.ok_or_else(|| {
                     "side is required when attaching to a full-duplex queue".to_string()
                 })?;
-                // One listener per side. round_robin still allows both sides to attach
-                // (multi-endpoint duplex); single_node also means one per side here.
+                // One listener per side (dispatch_strategy is rejected at create for duplex).
                 if queue.listeners().iter().any(|l| l.side == Some(side)) {
                     return Err(format!("full-duplex side '{side}' already has a listener"));
                 }
