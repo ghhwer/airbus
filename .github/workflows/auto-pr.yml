@@ -1,0 +1,44 @@
+name: auto-pr
+
+on:
+  push:
+    branches: ["feat/**"]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Open PR to main if missing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          if gh pr view "$BRANCH" --json number --jq .number >/dev/null 2>&1; then
+            echo "PR already exists for $BRANCH"
+            gh pr view "$BRANCH" --json url --jq .url
+            exit 0
+          fi
+
+          title=$(git log -1 --pretty=%s)
+          title=${title:-$BRANCH}
+
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "$title" \
+            --body "$(printf '%s\n' \
+              '## Summary' \
+              "Auto-opened from \`$BRANCH\`." \
+              '' \
+              '## Test plan' \
+              '- [ ] CI (`rust`, `client`) green')"
