@@ -17,7 +17,7 @@ jobs:
       - run: cargo test
       - run: node tests/protocol.test.mjs
 
-  client-py:
+  client:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

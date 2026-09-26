@@ -41,4 +41,4 @@ jobs:
               "Auto-opened from \`$BRANCH\`." \
               '' \
               '## Test plan' \
-              '- [ ] CI (`rust`, `client-py`, `client-cpp`) green')"
+              '- [ ] CI (`rust`, `client`, `client-cpp`) green')"
