@@ -34,40 +34,58 @@ client.create_queue(
 )
 ```
 
+### Queue modes vs dispatch strategy
+
+These are **two different knobs**. Do not confuse them:
+
+| Concept | Wire field | What it controls |
+| -------- | ---------- | ---------------- |
+| **Queue mode** | `mode` | How events are routed (fan-out, competing consumer, or host↔device). Set once at `create_queue`. |
+| **Dispatch strategy** | `dispatch_strategy` | How a **fifo** queue picks among multiple listeners. **Fifo only.** |
+
+`create_queue` **rejects** `dispatch_strategy` when `mode` is `broadcast` or `full-duplex` (including when `mode` is omitted and defaults to `broadcast`). Error: `dispatch_strategy is only valid when mode is fifo`. Omitting the field is always fine.
+
 ### Queue Modes
 
-Airbus supports three modes configured per queue:
+Airbus supports **three** modes (`broadcast`, `fifo`, `full-duplex`):
 
 ```
-Broadcast Mode (Fan-Out)                 FIFO Mode (Competing Consumers)
-────────────────────────                 ──────────────────────────────────
+Broadcast (fan-out)                      FIFO (competing consumers)
+───────────────────                      ──────────────────────────
 
        ┌───────────────┐                        ┌───────────────┐
        │ Queue (Event) │                        │ Queue (Event) │
        └───┬───┬───┬───┘                        └───────┬───────┘
-           │   │   │                                    │ (Round Robin / single_node)
+           │   │   │                                    │ round_robin / single_node
    ┌───────┘   │   └───────┐                            │
    ▼           ▼           ▼                            ▼
-Listener 1  Listener 2  Listener 3                  Listener 1
-(receives)  (receives)  (receives)                  (one consumer)
+Listener 1  Listener 2  Listener 3                  one listener
+(all receive)                                       (per event)
+
+Full-duplex (cross-route)
+─────────────────────────
+  host listener  ←──events──→  device listener
+  (exactly one per side; `side` required on attach/post)
 ```
 
-#### 1. `broadcast` Mode
-- **Semantics**: Every attached listener receives every event published to the queue.
-- **Use Cases**: System notifications, cache invalidation, SSE live-sync broadcasts, telemetry fan-out.
-- **Delivery**: An event delivery record is created for each attached listener. An event is considered fully delivered when all active listeners have acknowledged it.
+#### 1. `broadcast`
+- **Semantics**: Every attached listener receives every event.
+- **Listeners**: Many allowed.
+- **`dispatch_strategy`**: Must not be set.
+- **Use cases**: Notifications, cache invalidation, SSE / telemetry fan-out.
 
-#### 2. `fifo` Mode
-- **Semantics**: Competing consumers model. Each published event is routed to exactly one available listener.
-- **Use Cases**: Background processing jobs, heavy task execution, worker agent dispatch.
-- **Dispatch Strategies**:
-  - `round_robin` (default): Cycles sequentially through healthy, available listeners.
-  - `single_node`: Prefer a single exclusive consumer when configured for exclusivity.
+#### 2. `fifo`
+- **Semantics**: Each event goes to **exactly one** listener (competing consumers).
+- **`dispatch_strategy`** (optional; default `round_robin`):
+  - `round_robin` — cycle through healthy listeners; many may attach.
+  - `single_node` — **at most one** listener may attach; a second `attach_listener` fails with `fifo single_node queue already has a listener`.
+- **Use cases**: Job workers, exclusive single consumer pipelines.
 
-#### 3. `full-duplex` Mode
-- **Semantics**: Exactly one `host` and one `device` listener; events cross-route to the opposite side.
-- **Use Cases**: Agent ↔ server terminal buses (IFT remote clients).
-- **Side**: Required on `attach_listener` / `post_event` (`host` or `device`).
+#### 3. `full-duplex`
+- **Semantics**: Exactly one `host` and one `device` listener; each event is delivered only to the **opposite** side of the publisher.
+- **`side`**: Required on `attach_listener` / `post_event` (`host` or `device`); rejected on other modes.
+- **`dispatch_strategy`**: Must not be set. Exclusivity is always one listener per side (not controlled by strategy).
+- **Use cases**: Agent ↔ server terminal buses (e.g. IFT remote clients).
 
 ### Queue readiness (`queue_ready`)
 

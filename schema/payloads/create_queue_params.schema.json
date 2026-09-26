@@ -13,7 +13,8 @@
       "$ref": "common.schema.json#/$defs/QueueMode"
     },
     "dispatch_strategy": {
-      "$ref": "common.schema.json#/$defs/DispatchStrategy"
+      "$ref": "common.schema.json#/$defs/DispatchStrategy",
+      "description": "Fifo only; rejected for broadcast and full-duplex. Default when omitted on fifo: round_robin"
     }
   }
 }

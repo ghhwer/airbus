@@ -25,9 +25,10 @@ Rust, communicating over JSON-RPC 2.0 with strict cross-language protocol schema
 ## Key Capabilities
 
 1. **Named Event Queues**: Create and manage queues dynamically with configured delivery modes.
-2. **Dual Queue Modes**:
-   - `Broadcast`: Every attached listener receives every published event.
-   - `Worker`: Events are load-balanced across listeners (`round_robin`, `random`).
+2. **Three Queue Modes** (see [Queues & Dispatch](queues-and-dispatch.md)):
+   - `broadcast`: Every attached listener receives every event.
+   - `fifo`: Each event goes to one listener; optional `dispatch_strategy` (`round_robin` or exclusive `single_node`).
+   - `full-duplex`: Host ↔ device cross-route (`side` required; strategy not allowed).
 3. **Time-Ordered Event Identifiers**: Monotonically increasing, time-sortable UUIDv7 IDs.
 4. **Push-Based Listener Dispatch**: `on_event` RPC callbacks with acknowledgments.
 5. **Configurable Retries & Timeouts**: `max_retries`, `exhaustion_timeout_ms`.

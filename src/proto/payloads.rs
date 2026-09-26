@@ -307,6 +307,7 @@ impl<'de> ::serde::Deserialize<'de> for AttachListenerResultListenerId {
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct CreateQueueParams {
+    #[doc = "Fifo only; rejected for broadcast and full-duplex. Default when omitted on fifo: round_robin"]
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub dispatch_strategy: ::std::option::Option<DispatchStrategy>,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
