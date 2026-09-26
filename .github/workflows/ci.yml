@@ -22,6 +22,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/cache@v4
+        id: typify-cache
+        with:
+          path: ~/.cargo/bin/cargo-typify
+          key: cargo-typify-0.8.0-${{ runner.os }}
+      - name: Install cargo-typify
+        if: steps.typify-cache.outputs.cache-hit != 'true'
+        run: cargo install --locked --version 0.8.0 cargo-typify
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.13"
