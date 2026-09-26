@@ -27,15 +27,7 @@ pub struct QueueManager {
 
 impl QueueManager {
     pub fn new() -> Self {
-        let mut map = HashMap::new();
-        map.insert(
-            "demo".to_string(),
-            Arc::new(Mutex::new(Queue::new(
-                QueueMode::Broadcast,
-                DispatchStrategy::RoundRobin,
-            ))),
-        );
-        let queues = Arc::new(Mutex::new(map));
+        let queues = Arc::new(Mutex::new(HashMap::new()));
         let dispatcher = Dispatcher::start(Arc::clone(&queues));
         Self { queues, dispatcher }
     }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Rust + Python payload types from airbus/schema/payloads."""
+"""Generate Rust + Python + C++ payload types from airbus/schema/payloads."""
 
 from __future__ import annotations
 
@@ -17,8 +17,11 @@ ROOT = Path(__file__).resolve().parents[1]
 PAYLOADS = ROOT / "schema" / "payloads"
 COMMON_NAME = "common.schema.json"
 RS_OUT = ROOT / "src" / "proto" / "payloads.rs"
-PY_OUT = ROOT / "client" / "src" / "airbus_client" / "payloads.py"
+PY_OUT = ROOT / "client-py" / "src" / "airbus_client" / "payloads.py"
 CONTRACT_OUT = PY_OUT.with_name("contracts.py")
+CPP_PAYLOADS_OUT = ROOT / "client-cpp" / "include" / "airbus" / "payloads.hpp"
+CPP_CONTRACTS_HPP = ROOT / "client-cpp" / "include" / "airbus" / "contracts.hpp"
+CPP_CONTRACTS_CPP = ROOT / "client-cpp" / "src" / "contracts.cpp"
 BUNDLE_DIR = PAYLOADS
 CARGO_TYPIFY_VERSION = "0.8.0"
 PYTHON_GENERATOR_VERSION = "0.78.0"
@@ -251,7 +254,7 @@ def _strip_python_root_model(text: str) -> str:
 
 
 def generate_python(bundle: Path) -> None:
-    client = ROOT / "client"
+    client = ROOT / "client-py"
     PY_OUT.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
@@ -332,6 +335,7 @@ def generate_python(bundle: Path) -> None:
 
 def main() -> int:
     global RS_OUT, PY_OUT, CONTRACT_OUT, BUNDLE_DIR
+    global CPP_PAYLOADS_OUT, CPP_CONTRACTS_HPP, CPP_CONTRACTS_CPP
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--check", action="store_true", help="Regenerate in a temporary directory and compare"
@@ -358,15 +362,35 @@ def main() -> int:
             f"Requires datamodel-code-generator {PYTHON_GENERATOR_VERSION}; found {py_gen_version}"
         )
     if args.check:
-        expected = [RS_OUT, PY_OUT, CONTRACT_OUT]
+        expected = [
+            RS_OUT,
+            PY_OUT,
+            CONTRACT_OUT,
+            CPP_PAYLOADS_OUT,
+            CPP_CONTRACTS_HPP,
+            CPP_CONTRACTS_CPP,
+        ]
         with tempfile.TemporaryDirectory(prefix="airbus-codegen-") as directory:
             BUNDLE_DIR = Path(directory)
-            RS_OUT, PY_OUT, CONTRACT_OUT = [BUNDLE_DIR / path.name for path in expected]
+            RS_OUT = BUNDLE_DIR / expected[0].name
+            PY_OUT = BUNDLE_DIR / expected[1].name
+            CONTRACT_OUT = BUNDLE_DIR / expected[2].name
+            CPP_PAYLOADS_OUT = BUNDLE_DIR / expected[3].name
+            CPP_CONTRACTS_HPP = BUNDLE_DIR / expected[4].name
+            CPP_CONTRACTS_CPP = BUNDLE_DIR / expected[5].name
             generate_all()
             stale = False
-            for checked_in, generated in zip(expected, [RS_OUT, PY_OUT, CONTRACT_OUT], strict=True):
+            generated = [
+                RS_OUT,
+                PY_OUT,
+                CONTRACT_OUT,
+                CPP_PAYLOADS_OUT,
+                CPP_CONTRACTS_HPP,
+                CPP_CONTRACTS_CPP,
+            ]
+            for checked_in, gen in zip(expected, generated, strict=True):
                 before = checked_in.read_text() if checked_in.exists() else ""
-                after = generated.read_text()
+                after = gen.read_text()
                 if before != after:
                     stale = True
                     print(
@@ -392,6 +416,28 @@ def generate_all() -> None:
     py_bundle = write_python_bundle()
     generate_python(py_bundle)
     generate_contracts()
+    generate_cpp()
+
+
+def generate_cpp() -> None:
+    import importlib
+    import sys
+
+    scripts_dir = str(Path(__file__).resolve().parent)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    cpp_codegen = importlib.import_module("cpp_codegen")
+
+    cpp_codegen.ROOT = ROOT
+    cpp_codegen.PAYLOADS = PAYLOADS
+    cpp_codegen.COMMON_NAME = COMMON_NAME
+    cpp_codegen.PAYLOAD_FILES = PAYLOAD_FILES
+    cpp_codegen.CPP_PAYLOADS_OUT = CPP_PAYLOADS_OUT
+    cpp_codegen.CPP_CONTRACTS_HPP = CPP_CONTRACTS_HPP
+    cpp_codegen.CPP_CONTRACTS_CPP = CPP_CONTRACTS_CPP
+    cpp_codegen.load = load
+    cpp_codegen.rewrite_refs_rust = rewrite_refs_rust
+    cpp_codegen.generate_all_cpp()
 
 
 def generate_contracts() -> None:

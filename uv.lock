@@ -30,7 +30,7 @@ dev = [{ name = "ruff", specifier = ">=0.11.0" }]
 [[package]]
 name = "airbus-client"
 version = "0.1.0"
-source = { editable = "client" }
+source = { editable = "client-py" }
 dependencies = [
     { name = "jsonschema" },
 ]

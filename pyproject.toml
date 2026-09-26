@@ -10,7 +10,7 @@ package = false
 default-groups = ["dev"]
 
 [tool.uv.workspace]
-members = ["client"]
+members = ["client-py"]
 
 [dependency-groups]
 dev = [

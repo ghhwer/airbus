@@ -1,0 +1,52 @@
+name: publish-client-cpp
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  osv:
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.6.0
+    with:
+      fail-on-vuln: true
+      scan-args: |-
+        -r
+        ./
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+  release-assets:
+    needs: [osv]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Resolve version from tag
+        id: ver
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+      - name: Pack C++ and PlatformIO assets
+        run: |
+          python scripts/pack_cpp_clients.py \
+            --version "${{ steps.ver.outputs.version }}" \
+            --out-dir dist
+          ls -la dist
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          files: |
+            dist/airbus-client-cpp-v${{ steps.ver.outputs.version }}.zip
+            dist/airbus-client-pio-v${{ steps.ver.outputs.version }}.zip
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
