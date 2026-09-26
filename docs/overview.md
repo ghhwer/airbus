@@ -6,7 +6,8 @@ Rust, communicating over JSON-RPC 2.0 with strict cross-language protocol schema
 ## Components
 
 - **Airbus daemon** (`src/`): Rust JSON-RPC TCP server providing event queues and dispatch.
-- **Airbus Python client** (`client/` → `airbus_client`): publishable SDK for other projects.
+- **Airbus Python client** (`client-py/` → `airbus_client`): publishable SDK for other projects.
+- **Airbus C++ client** (`client-cpp/`): CMake library; C++ and PlatformIO release zips are packed from this tree.
 - **Airbus Debug UI** (`resources/ui/`): Browser interface for queue inspection and RPC execution.
 - **Container image** (`Dockerfile`): runs the daemon + UI for deployment.
 
@@ -14,7 +15,7 @@ Rust, communicating over JSON-RPC 2.0 with strict cross-language protocol schema
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Your application                        │
 │                                                                 │
-│   airbus-client (pip)  ── JSON-RPC 2.0 (TCP :9097) ──▶ Airbus   │
+│   airbus-client (pip / C++ / PIO) ── JSON-RPC 2.0 (TCP :9097) ──▶ Airbus   │
 │                                                         daemon  │
 │                              ▲                                  │
 │                              │ HTTP :9098  Debug UI / POST /rpc │
@@ -73,6 +74,24 @@ from airbus_client import RpcClient
 
 client = RpcClient()
 assert client.ping() == "pong"
+```
+
+## C++ / PlatformIO Clients
+
+Release assets (on `v*` tags), both built from `client-cpp/`:
+
+- `airbus-client-cpp-vX.Y.Z.zip` — CMake / desktop
+- `airbus-client-pio-vX.Y.Z.zip` — same sources + PlatformIO `library.json` for `lib_deps`
+
+```cpp
+#include <airbus/client.hpp>
+
+airbus::RpcClient client;
+assert(client.ping() == "pong");
+
+airbus::Queue queue("tasks");
+queue.create(airbus::QueueMode::Fifo);
+queue.post({{"action", "build"}});
 ```
 
 ## Detailed Documentation

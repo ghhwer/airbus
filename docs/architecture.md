@@ -27,7 +27,7 @@ airbus/
 │   ├── wiring.rs       # Composition root: wires AppService onto RpcServer
 │   ├── lib.rs          # Library exports
 │   └── main.rs         # CLI parsing, server bootstrap, signal handling
-└── client/             # Python airbus-client package (uv workspace member)
+└── client-py/          # Python airbus-client package (uv workspace member)
 ```
 
 | Layer | Module Path | Responsibility |
@@ -38,7 +38,7 @@ airbus/
 | **Runtime Engine** | `src/runtime/` | Core queuing engine: `QueueManager`, `Queue`, `Dispatcher`, delivery tracking, worker strategies, and time-ordered UUIDv7 generation. |
 | **Application** | `src/app/` | `AppService`: business logic dispatching RPC methods to the runtime engine and formatting generated response types. |
 | **Wiring** | `src/wiring.rs` | Binds method names (`ping`, `create_queue`, `post_event`, etc.) on `RpcServer` to `AppService` handlers. |
-| **Client** | `client/` | Python SDK (`airbus_client`) with `RpcClient`, listener server, and protocol serialization. |
+| **Client** | `client-py/` | Python SDK (`airbus_client`) with `RpcClient`, listener server, and protocol serialization. |
 
 ---
 

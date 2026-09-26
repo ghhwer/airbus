@@ -17,7 +17,7 @@ const listenersEl = document.getElementById("listeners");
 const SOFT_CAP = 32;
 const PEEK_N = 40;
 
-let selectedQueue = "demo";
+let selectedQueue = "";
 let rpcId = 1;
 let lastDepthByQueue = new Map();
 let lastError = "";
@@ -235,7 +235,12 @@ async function refresh(forcePeek = false) {
 }
 
 async function enqueueSimple() {
-  const queue = queueNameEl.value.trim() || "demo";
+  const queue = queueNameEl.value.trim();
+  if (!queue) {
+    setLive(false, "need queue");
+    totalsEl.textContent = "Enter a queue name";
+    return;
+  }
   const type = document.getElementById("post-type").value.trim() || "event";
   const n = Number(document.getElementById("post-n").value) || 0;
   selectQueue(queue);
@@ -246,7 +251,12 @@ async function enqueueSimple() {
 }
 
 async function enqueueJson() {
-  const queue = queueNameEl.value.trim() || "demo";
+  const queue = queueNameEl.value.trim();
+  if (!queue) {
+    setLive(false, "need queue");
+    totalsEl.textContent = "Enter a queue name";
+    return;
+  }
   let event;
   try {
     event = JSON.parse(document.getElementById("post-event").value);
@@ -279,7 +289,8 @@ document.getElementById("post-json-btn").addEventListener("click", () => {
 });
 document.getElementById("refresh-btn").addEventListener("click", () => refresh(true));
 queueNameEl.addEventListener("change", () => {
-  selectQueue(queueNameEl.value.trim() || "demo");
+  const queue = queueNameEl.value.trim();
+  if (queue) selectQueue(queue);
   refresh(true);
 });
 

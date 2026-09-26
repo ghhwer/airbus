@@ -241,11 +241,7 @@ fn service_post_event_invalid_params() {
 #[test]
 fn service_list_queues_default() {
     let app = AppService::new();
-    let listed = app.list_queues();
-    assert_eq!(listed.queues.len(), 1);
-    assert_eq!(listed.queues[0].name.as_str(), "demo");
-    assert_eq!(listed.queues[0].mode, QueueMode::Broadcast);
-    assert_eq!(listed.queues[0].listener_count, 0);
+    assert!(app.list_queues().queues.is_empty());
 }
 
 #[test]
@@ -263,12 +259,11 @@ fn service_list_and_peek_events() {
         .unwrap();
 
     let listed = app.list_queues();
-    assert_eq!(listed.queues.len(), 3);
-    assert_eq!(listed.queues[0].name.as_str(), "demo");
-    assert_eq!(listed.queues[1].name.as_str(), "jobs");
-    assert_eq!(listed.queues[1].depth, 2);
-    assert_eq!(listed.queues[2].name.as_str(), "other");
-    assert_eq!(listed.queues[2].depth, 1);
+    assert_eq!(listed.queues.len(), 2);
+    assert_eq!(listed.queues[0].name.as_str(), "jobs");
+    assert_eq!(listed.queues[0].depth, 2);
+    assert_eq!(listed.queues[1].name.as_str(), "other");
+    assert_eq!(listed.queues[1].depth, 1);
 
     let peeked = app.peek_events(peek_params("jobs", Some(10))).unwrap();
     assert_eq!(peeked.events.len(), 2);
@@ -282,7 +277,15 @@ fn service_list_and_peek_events() {
     assert_eq!(ns, [1, 2].into());
 
     // peek is non-destructive
-    assert_eq!(app.list_queues().queues[1].depth, 2);
+    assert_eq!(
+        listed
+            .queues
+            .iter()
+            .find(|q| q.name.as_str() == "jobs")
+            .unwrap()
+            .depth,
+        2
+    );
     assert_eq!(
         app.peek_events(peek_params("jobs", None))
             .unwrap()
@@ -369,7 +372,6 @@ fn queue_manager_list_and_peek() {
     assert_eq!(
         listed,
         vec![
-            ("demo".into(), 0, QueueMode::Broadcast, 0),
             ("jobs".into(), 2, QueueMode::Broadcast, 0),
             ("other".into(), 1, QueueMode::Broadcast, 0)
         ]
@@ -383,7 +385,6 @@ fn queue_manager_list_and_peek() {
     assert_eq!(
         manager.list(),
         vec![
-            ("demo".into(), 0, QueueMode::Broadcast, 0),
             ("jobs".into(), 2, QueueMode::Broadcast, 0),
             ("other".into(), 1, QueueMode::Broadcast, 0)
         ]

@@ -125,7 +125,10 @@ def test_generated_result_is_validated_without_coercing_bad_types(monkeypatch):
     ],
 )
 def test_listener_rejects_invalid_requests_before_callback(rpc, document):
+    from airbus_client.payloads import CreateQueueParams
+
     events = []
+    rpc.create_queue(CreateQueueParams(queue="demo"))
     with rpc.listen("demo", on_event=events.append) as listener:
         response = RpcClient("127.0.0.1", listener.port)._raw(document)
         assert events == []

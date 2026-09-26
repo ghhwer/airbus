@@ -30,7 +30,7 @@ jobs:
         with:
           python-version: "3.13"
       - run: uv sync --all-packages
-      - working-directory: client
+      - working-directory: client-py
         run: uv build
-      - working-directory: client
+      - working-directory: client-py
         run: uv publish
