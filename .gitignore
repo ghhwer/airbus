@@ -20,5 +20,17 @@ wheels/
 .vscode/
 *.swp
 
+# Secrets / credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_rsa.*
+credentials.json
+
 # Docker
 *.tar
