@@ -1,18 +1,18 @@
 # syntax=docker/dockerfile:1
 
+# Statically linked musl binary → scratch runtime (no OS packages for Trivy to flag).
 FROM rust:1.85-bookworm AS builder
 WORKDIR /src
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends musl-tools \
+	&& rm -rf /var/lib/apt/lists/* \
+	&& rustup target add x86_64-unknown-linux-musl
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
-RUN cargo build --release
+RUN cargo build --release --target x86_64-unknown-linux-musl
 
-FROM debian:bookworm-slim AS runtime
-RUN apt-get update \
-	&& apt-get upgrade -y --no-install-recommends \
-	&& apt-get install -y --no-install-recommends ca-certificates \
-	&& rm -rf /var/lib/apt/lists/*
-
-COPY --from=builder /src/target/release/airbus /usr/local/bin/airbus
+FROM scratch
+COPY --from=builder /src/target/x86_64-unknown-linux-musl/release/airbus /airbus
 COPY resources /opt/airbus/resources
 
 ENV AIRBUS_LISTEN=0.0.0.0:9097 \
@@ -21,5 +21,5 @@ ENV AIRBUS_LISTEN=0.0.0.0:9097 \
 
 EXPOSE 9097 9098
 
-ENTRYPOINT ["airbus"]
+ENTRYPOINT ["/airbus"]
 CMD ["--listen", "0.0.0.0:9097", "--http", "0.0.0.0:9098", "--resources", "/opt/airbus/resources/ui"]
