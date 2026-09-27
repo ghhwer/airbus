@@ -8,6 +8,7 @@ RUN cargo build --release
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
+	&& apt-get upgrade -y --no-install-recommends \
 	&& apt-get install -y --no-install-recommends ca-certificates \
 	&& rm -rf /var/lib/apt/lists/*
 
