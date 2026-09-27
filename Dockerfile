@@ -2,7 +2,7 @@
 
 # Statically linked musl binary with embedded dependency metadata (cargo auditable)
 # → scratch runtime (no OS packages). Scan the binary with `cargo audit bin`.
-FROM rust:1.85-bookworm AS builder
+FROM rust:1.86-bookworm AS builder
 WORKDIR /src
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends musl-tools \
