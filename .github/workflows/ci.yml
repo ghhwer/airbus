@@ -13,8 +13,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-audit
+        run: cargo install --locked cargo-audit
       - run: cargo clippy -- -D warnings
       - run: cargo test
+      - run: cargo audit
       - run: node tests/protocol.test.mjs
 
   client:
@@ -44,7 +48,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-audit
+        run: cargo install --locked cargo-audit
       - run: docker build -t airbus:ci .
+      - name: Audit image binary
+        run: |
+          set -euo pipefail
+          cid="$(docker create airbus:ci)"
+          docker cp "${cid}:/airbus" ./airbus-ci
+          docker rm "${cid}"
+          cargo audit bin ./airbus-ci
 
   client-cpp:
     runs-on: ubuntu-latest

@@ -31,6 +31,13 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-audit
+        run: cargo install --locked cargo-audit
+      - name: Audit Cargo.lock (RustSec)
+        # Known crate advisories + yanked crates (complements OSV above).
+        run: cargo audit
       - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -50,15 +57,32 @@ jobs:
           load: true
           tags: ${{ env.LOCAL_TAG }}
           labels: ${{ steps.meta.outputs.labels }}
+      - name: Audit release binary (embedded deps via cargo auditable)
+        run: |
+          set -euo pipefail
+          cid="$(docker create "${{ env.LOCAL_TAG }}")"
+          docker cp "${cid}:/airbus" ./airbus-release
+          docker rm "${cid}"
+          cargo audit bin ./airbus-release
       - name: Scan image with Trivy
-        # Pin by SHA: tag 0.28.0 no longer resolves (post-compromise cleanup). 0.35.0 = 57a97c7…
+        # OS package CVEs only (scratch → usually empty). Pin by SHA (0.35.0).
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: ${{ env.LOCAL_TAG }}
+          format: table
+          severity: CRITICAL,HIGH
+          scanners: vuln
+          exit-code: "1"
+      - name: Write Trivy SARIF
+        if: always()
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
         with:
           image-ref: ${{ env.LOCAL_TAG }}
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
-          exit-code: "1"
+          scanners: vuln
+          exit-code: "0"
       - name: Upload Trivy SARIF
         if: always() && hashFiles('trivy-results.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3

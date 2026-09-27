@@ -30,9 +30,13 @@ jobs:
         with:
           python-version: "3.13"
       - run: uv sync --all-packages
-      - working-directory: client-py
-        run: uv build
-      - working-directory: client-py
-        # Requires a PyPI Trusted Publisher for ghhwer/airbus → publish-client.yml (env: pypi).
-        # Pending publishers work before the project exists: https://docs.pypi.org/trusted-publishers/
-        run: uv publish --trusted-publishing always
+      # Workspace root owns dist/ (also used for C++ zips); build/publish must use an explicit out-dir.
+      - name: Build and publish to PyPI
+        run: |
+          set -euo pipefail
+          out="$(mktemp -d)"
+          uv build --package airbus-client --out-dir "$out"
+          ls -la "$out"
+          # Requires a PyPI Trusted Publisher for ghhwer/airbus → publish-client.yml (env: pypi).
+          # Pending publishers work before the project exists: https://docs.pypi.org/trusted-publishers/
+          uv publish --trusted-publishing always "$out"/*
