@@ -33,4 +33,6 @@ jobs:
       - working-directory: client-py
         run: uv build
       - working-directory: client-py
-        run: uv publish
+        # Requires a PyPI Trusted Publisher for ghhwer/airbus → publish-client.yml (env: pypi).
+        # Pending publishers work before the project exists: https://docs.pypi.org/trusted-publishers/
+        run: uv publish --trusted-publishing always

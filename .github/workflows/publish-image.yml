@@ -51,7 +51,8 @@ jobs:
           tags: ${{ env.LOCAL_TAG }}
           labels: ${{ steps.meta.outputs.labels }}
       - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@0.28.0
+        # Pin by SHA: tag 0.28.0 no longer resolves (post-compromise cleanup). 0.35.0 = 57a97c7…
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
         with:
           image-ref: ${{ env.LOCAL_TAG }}
           format: sarif
