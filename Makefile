@@ -75,7 +75,9 @@ docker-run:
 	docker run --rm -p 9097:9097 -p 9098:9098 airbus:local
 
 publish-client: setup
-	cd $(CLIENT_DIR) && uv build && uv publish
+	@out=$$(mktemp -d); \
+	uv build --package airbus-client --out-dir "$$out"; \
+	uv publish --trusted-publishing always "$$out"/*
 
 pack-client-cpp:
 	python3 scripts/pack_cpp_clients.py --out-dir dist
