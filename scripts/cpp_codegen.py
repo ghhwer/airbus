@@ -1,18 +1,16 @@
-"""Generate C++ payload types and contracts from schema/payloads + openrpc."""
+"""Generate embedded ArduinoJson payload types from schema."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Callable
+from typing import Callable
 
 ROOT: Path
 PAYLOADS: Path
 COMMON_NAME: str
 PAYLOAD_FILES: list[str]
-CPP_PAYLOADS_OUT: Path
-CPP_CONTRACTS_HPP: Path
-CPP_CONTRACTS_CPP: Path
+EMBEDDED_PAYLOADS_OUT: Path
 
 load: Callable[[str], dict]
 rewrite_refs_rust: Callable[[object], object]
@@ -23,68 +21,206 @@ def _cpp_enum_variant(value: str) -> str:
     return "".join(p[:1].upper() + p[1:] for p in parts if p)
 
 
-def _emit_enum(name: str, values: list[str]) -> str:
+def _emb_enum(name: str, values: list[str]) -> str:
     lines = [f"enum class {name} {{"]
     for value in values:
         lines.append(f"  {_cpp_enum_variant(value)},")
     lines.append("};")
     lines.append("")
-    lines.append(f"inline void to_json(nlohmann::json& j, {name} value) {{")
+    lines.append(
+        f"inline bool toJson(JsonVariant dest, {name} value, String& /*err*/) {{"
+    )
     lines.append("  switch (value) {")
     for value in values:
         lines.append(
-            f"    case {name}::{_cpp_enum_variant(value)}: j = {json.dumps(value)}; break;"
+            f"    case {name}::{_cpp_enum_variant(value)}: dest.set({json.dumps(value)}); return true;"
         )
     lines.append("  }")
+    lines.append("  return false;")
     lines.append("}")
     lines.append("")
-    lines.append(f"inline void from_json(const nlohmann::json& j, {name}& value) {{")
-    lines.append("  const auto& s = j.get_ref<const std::string&>();")
+    lines.append(
+        f"inline bool fromJson(JsonVariantConst src, {name}& value, String& err) {{"
+    )
+    lines.append("  const char* s = src.as<const char*>();")
+    lines.append("  if (s == nullptr) { err = \"invalid " + name + "\"; return false; }")
     for value in values:
         lines.append(
-            f"  if (s == {json.dumps(value)}) {{ value = {name}::{_cpp_enum_variant(value)}; return; }}"
+            f"  if (strcmp(s, {json.dumps(value)}) == 0) {{ value = {name}::{_cpp_enum_variant(value)}; return true; }}"
         )
-    lines.append(f'  throw std::invalid_argument("invalid {name}: " + s);')
+    lines.append(f'  err = "invalid {name}";')
+    lines.append("  return false;")
     lines.append("}")
     lines.append("")
     return "\n".join(lines)
 
 
-def _emit_struct(name: str, fields: list[tuple[str, str, bool]]) -> str:
-    """fields: (json_name, cpp_type, optional)."""
+def _emb_struct(name: str, fields: list[tuple[str, str, bool]]) -> str:
+    """fields: (json_name, emb_type, optional). emb_type may be JsonDocument for free-form objects."""
     lines = [f"struct {name} {{"]
-    for pname, ctype, _optional in fields:
+    for pname, ctype, optional in fields:
+        if optional:
+            lines.append(f"  bool has_{pname} = false;")
         lines.append(f"  {ctype} {pname}{{}};")
     lines.append("};")
     lines.append("")
-    lines.append(f"inline void to_json(nlohmann::json& j, const {name}& value) {{")
-    lines.append("  j = nlohmann::json::object();")
-    for pname, _ctype, optional in fields:
-        key = json.dumps(pname)
-        if optional:
-            lines.append(f"  if (value.{pname}.has_value()) j[{key}] = *value.{pname};")
-        else:
-            lines.append(f"  j[{key}] = value.{pname};")
-    lines.append("}")
-    lines.append("")
-    lines.append(f"inline void from_json(const nlohmann::json& j, {name}& value) {{")
+
+    lines.append(
+        f"inline bool toJson(JsonObject dest, const {name}& value, String& err) {{"
+    )
     for pname, ctype, optional in fields:
         key = json.dumps(pname)
         if optional:
-            inner = ctype[len("std::optional<") : -1]
-            lines.append(f"  if (j.contains({key}) && !j[{key}].is_null()) {{")
-            lines.append(f"    value.{pname} = j.at({key}).get<{inner}>();")
-            lines.append("  } else {")
-            lines.append(f"    value.{pname} = std::nullopt;")
+            lines.append(f"  if (value.has_{pname}) {{")
+            if ctype == "JsonDocument":
+                lines.append(f"    if (!dest[{key}].set(value.{pname}.as<JsonVariantConst>())) {{")
+                lines.append(f'      err = "encode {pname}";')
+                lines.append("      return false;")
+                lines.append("    }")
+            elif ctype.startswith("std::vector<"):
+                inner = ctype[len("std::vector<") : -1]
+                lines.append(f"    JsonArray arr = dest[{key}].to<JsonArray>();")
+                lines.append(f"    for (const auto& item : value.{pname}) {{")
+                if inner in ("double", "std::int64_t", "bool", "String"):
+                    lines.append("      arr.add(item);")
+                else:
+                    lines.append("      JsonObject obj = arr.add<JsonObject>();")
+                    lines.append("      if (!toJson(obj, item, err)) return false;")
+                lines.append("    }")
+            else:
+                lines.append(f"    if (!toJson(dest[{key}], value.{pname}, err)) return false;")
             lines.append("  }")
         else:
-            lines.append(f"  j.at({key}).get_to(value.{pname});")
+            if ctype == "JsonDocument":
+                lines.append(f"  if (!dest[{key}].set(value.{pname}.as<JsonVariantConst>())) {{")
+                lines.append(f'    err = "encode {pname}";')
+                lines.append("    return false;")
+                lines.append("  }")
+            elif ctype.startswith("std::vector<"):
+                inner = ctype[len("std::vector<") : -1]
+                lines.append(f"  {{")
+                lines.append(f"    JsonArray arr = dest[{key}].to<JsonArray>();")
+                lines.append(f"    for (const auto& item : value.{pname}) {{")
+                if inner in ("double", "std::int64_t", "bool", "String"):
+                    lines.append("      arr.add(item);")
+                else:
+                    lines.append("      JsonObject obj = arr.add<JsonObject>();")
+                    lines.append("      if (!toJson(obj, item, err)) return false;")
+                lines.append("    }")
+                lines.append("  }")
+            elif ctype in ("String", "std::int64_t", "bool", "double"):
+                lines.append(f"  dest[{key}] = value.{pname};")
+            else:
+                lines.append(f"  if (!toJson(dest[{key}], value.{pname}, err)) return false;")
+    lines.append("  return true;")
+    lines.append("}")
+    lines.append("")
+
+    lines.append(
+        f"inline bool fromJson(JsonObjectConst src, {name}& value, String& err) {{"
+    )
+    for pname, ctype, optional in fields:
+        key = json.dumps(pname)
+        if optional:
+            lines.append(f"  if (src[{key}].isNull()) {{")
+            lines.append(f"    value.has_{pname} = false;")
+            lines.append("  } else {")
+            lines.append(f"    value.has_{pname} = true;")
+            if ctype == "JsonDocument":
+                lines.append(f"    value.{pname}.clear();")
+                lines.append(f"    if (!value.{pname}.set(src[{key}])) {{")
+                lines.append(f'      err = "decode {pname}";')
+                lines.append("      return false;")
+                lines.append("    }")
+            elif ctype.startswith("std::vector<"):
+                inner = ctype[len("std::vector<") : -1]
+                lines.append(f"    JsonArrayConst arr = src[{key}].as<JsonArrayConst>();")
+                lines.append("    if (arr.isNull()) { err = \"decode " + pname + "\"; return false; }")
+                lines.append(f"    value.{pname}.clear();")
+                lines.append("    for (JsonVariantConst item : arr) {")
+                if inner == "double":
+                    lines.append(f"      value.{pname}.push_back(item.as<double>());")
+                elif inner == "std::int64_t":
+                    lines.append(f"      value.{pname}.push_back(item.as<std::int64_t>());")
+                elif inner == "String":
+                    lines.append(f"      value.{pname}.push_back(item.as<String>());")
+                else:
+                    lines.append(f"      {inner} elem{{}};")
+                    lines.append(
+                        "      if (!item.is<JsonObjectConst>() || !fromJson(item.as<JsonObjectConst>(), elem, err)) return false;"
+                    )
+                    lines.append(f"      value.{pname}.push_back(std::move(elem));")
+                lines.append("    }")
+            elif ctype == "String":
+                lines.append(f"    value.{pname} = src[{key}].as<String>();")
+            elif ctype == "std::int64_t":
+                lines.append(f"    value.{pname} = src[{key}].as<std::int64_t>();")
+            elif ctype == "bool":
+                lines.append(f"    value.{pname} = src[{key}].as<bool>();")
+            elif ctype == "double":
+                lines.append(f"    value.{pname} = src[{key}].as<double>();")
+            else:
+                lines.append(
+                    f"    if (!fromJson(src[{key}], value.{pname}, err)) return false;"
+                )
+            lines.append("  }")
+        else:
+            if ctype == "JsonDocument":
+                lines.append(f"  if (!src[{key}].is<JsonObjectConst>() && !src[{key}].is<JsonArrayConst>()) {{")
+                lines.append(f'    err = "missing {pname}";')
+                lines.append("    return false;")
+                lines.append("  }")
+                lines.append(f"  value.{pname}.clear();")
+                lines.append(f"  if (!value.{pname}.set(src[{key}])) {{")
+                lines.append(f'    err = "decode {pname}";')
+                lines.append("    return false;")
+                lines.append("  }")
+            elif ctype.startswith("std::vector<"):
+                inner = ctype[len("std::vector<") : -1]
+                lines.append(f"  {{")
+                lines.append(f"    JsonArrayConst arr = src[{key}].as<JsonArrayConst>();")
+                lines.append(
+                    "    if (arr.isNull()) { err = \"missing "
+                    + pname
+                    + "\"; return false; }"
+                )
+                lines.append(f"    value.{pname}.clear();")
+                lines.append("    for (JsonVariantConst item : arr) {")
+                if inner == "double":
+                    lines.append(f"      value.{pname}.push_back(item.as<double>());")
+                else:
+                    lines.append(f"      {inner} elem{{}};")
+                    lines.append(
+                        "      if (!item.is<JsonObjectConst>() || !fromJson(item.as<JsonObjectConst>(), elem, err)) return false;"
+                    )
+                    lines.append(f"      value.{pname}.push_back(std::move(elem));")
+                lines.append("    }")
+                lines.append("  }")
+            elif ctype == "String":
+                lines.append(f"  if (src[{key}].isNull()) {{ err = \"missing {pname}\"; return false; }}")
+                lines.append(f"  value.{pname} = src[{key}].as<String>();")
+            elif ctype == "std::int64_t":
+                lines.append(f"  if (!src[{key}].is<std::int64_t>() && !src[{key}].is<int>()) {{ err = \"missing {pname}\"; return false; }}")
+                lines.append(f"  value.{pname} = src[{key}].as<std::int64_t>();")
+            elif ctype == "bool":
+                lines.append(f"  if (!src[{key}].is<bool>()) {{ err = \"missing {pname}\"; return false; }}")
+                lines.append(f"  value.{pname} = src[{key}].as<bool>();")
+            elif ctype == "double":
+                lines.append(f"  if (!src[{key}].is<double>() && !src[{key}].is<int>()) {{ err = \"missing {pname}\"; return false; }}")
+                lines.append(f"  value.{pname} = src[{key}].as<double>();")
+            else:
+                # enum or nested struct via JsonVariant
+                lines.append(
+                    f"  if (!fromJson(src[{key}], value.{pname}, err)) return false;"
+                )
+    lines.append("  return true;")
     lines.append("}")
     lines.append("")
     return "\n".join(lines)
 
 
-def generate_cpp_payloads() -> None:
+def generate_embedded_payloads() -> None:
+    """ArduinoJson payload types — no schema catalog, bool+String err codecs."""
     common = load(COMMON_NAME)["$defs"]
 
     chunks: list[str] = [
@@ -92,160 +228,228 @@ def generate_cpp_payloads() -> None:
         "// Source of truth: schema/payloads/*.schema.json",
         "#pragma once",
         "",
+        "#include <Arduino.h>",
+        "#include <ArduinoJson.h>",
         "#include <cstdint>",
-        "#include <optional>",
-        "#include <stdexcept>",
-        "#include <string>",
+        "#include <cstring>",
+        "#include <utility>",
         "#include <vector>",
-        "",
-        "#include <nlohmann/json.hpp>",
         "",
         "namespace airbus {",
         "",
-        "using PingResult = std::string;",
+        "using PingResult = String;",
         "using AddResult = double;",
         "using AddParams = std::vector<double>;",
         "",
-        _emit_enum("QueueMode", list(common["QueueMode"]["enum"])),
-        _emit_enum("DispatchStrategy", list(common["DispatchStrategy"]["enum"])),
-        _emit_enum("DuplexSide", list(common["DuplexSide"]["enum"])),
-        _emit_enum("Status", ["ok"]),
-        _emit_struct(
+        "inline bool toJson(JsonVariant dest, const AddParams& value, String& /*err*/) {",
+        "  JsonArray arr = dest.to<JsonArray>();",
+        "  for (double item : value) arr.add(item);",
+        "  return true;",
+        "}",
+        "",
+        "inline bool fromJson(JsonVariantConst src, AddParams& value, String& err) {",
+        "  JsonArrayConst arr = src.as<JsonArrayConst>();",
+        "  if (arr.isNull()) { err = \"invalid AddParams\"; return false; }",
+        "  value.clear();",
+        "  for (JsonVariantConst item : arr) value.push_back(item.as<double>());",
+        "  return true;",
+        "}",
+        "",
+        "inline bool toJson(JsonVariant dest, const PingResult& value, String& /*err*/) {",
+        "  dest.set(value);",
+        "  return true;",
+        "}",
+        "",
+        "inline bool fromJson(JsonVariantConst src, PingResult& value, String& err) {",
+        "  if (src.isNull()) { err = \"invalid PingResult\"; return false; }",
+        "  value = src.as<String>();",
+        "  return true;",
+        "}",
+        "",
+        "inline bool toJson(JsonVariant dest, const String& value, String& /*err*/) {",
+        "  dest.set(value);",
+        "  return true;",
+        "}",
+        "",
+        "inline bool fromJson(JsonVariantConst src, String& value, String& err) {",
+        "  if (src.isNull()) { err = \"invalid string\"; return false; }",
+        "  value = src.as<String>();",
+        "  return true;",
+        "}",
+        "",
+        "inline bool toJson(JsonVariant dest, std::int64_t value, String& /*err*/) {",
+        "  dest.set(value);",
+        "  return true;",
+        "}",
+        "",
+        "inline bool fromJson(JsonVariantConst src, std::int64_t& value, String& err) {",
+        "  if (!src.is<std::int64_t>() && !src.is<int>()) { err = \"invalid int\"; return false; }",
+        "  value = src.as<std::int64_t>();",
+        "  return true;",
+        "}",
+        "",
+        "inline bool toJson(JsonVariant dest, bool value, String& /*err*/) {",
+        "  dest.set(value);",
+        "  return true;",
+        "}",
+        "",
+        "inline bool fromJson(JsonVariantConst src, bool& value, String& err) {",
+        "  if (!src.is<bool>()) { err = \"invalid bool\"; return false; }",
+        "  value = src.as<bool>();",
+        "  return true;",
+        "}",
+        "",
+        "inline bool toJson(JsonVariant dest, double value, String& /*err*/) {",
+        "  dest.set(value);",
+        "  return true;",
+        "}",
+        "",
+        "inline bool fromJson(JsonVariantConst src, double& value, String& err) {",
+        "  if (!src.is<double>() && !src.is<int>()) { err = \"invalid number\"; return false; }",
+        "  value = src.as<double>();",
+        "  return true;",
+        "}",
+        "",
+        _emb_enum("QueueMode", list(common["QueueMode"]["enum"])),
+        _emb_enum("DispatchStrategy", list(common["DispatchStrategy"]["enum"])),
+        _emb_enum("DuplexSide", list(common["DuplexSide"]["enum"])),
+        _emb_enum("Status", ["ok"]),
+        _emb_struct(
             "QueueInfo",
             [
-                ("name", "std::string", False),
+                ("name", "String", False),
                 ("depth", "std::int64_t", False),
                 ("mode", "QueueMode", False),
                 ("listener_count", "std::int64_t", False),
             ],
         ),
-        _emit_struct(
+        _emb_struct(
             "Event",
             [
-                ("id", "std::string", False),
-                ("event", "nlohmann::json", False),
+                ("id", "String", False),
+                ("event", "JsonDocument", False),
             ],
         ),
-        _emit_struct(
+        _emb_struct(
             "Listener",
             [
-                ("id", "std::string", False),
-                ("queue", "std::string", False),
-                ("host", "std::string", False),
+                ("id", "String", False),
+                ("queue", "String", False),
+                ("host", "String", False),
                 ("port", "std::int64_t", False),
                 ("mode", "QueueMode", False),
                 ("failure_count", "std::int64_t", False),
                 ("active", "bool", False),
-                ("side", "std::optional<DuplexSide>", True),
+                ("side", "DuplexSide", True),
             ],
         ),
-        _emit_struct(
+        _emb_struct(
             "PostEventParams",
             [
-                ("queue", "std::string", False),
-                ("event", "nlohmann::json", False),
-                ("side", "std::optional<DuplexSide>", True),
+                ("queue", "String", False),
+                ("event", "JsonDocument", False),
+                ("side", "DuplexSide", True),
             ],
         ),
-        _emit_struct(
+        _emb_struct(
             "PostEventResult",
             [
-                ("id", "std::string", False),
-                ("queue", "std::string", False),
+                ("id", "String", False),
+                ("queue", "String", False),
             ],
         ),
-        _emit_struct(
+        _emb_struct(
             "ListQueuesResult",
             [("queues", "std::vector<QueueInfo>", False)],
         ),
-        _emit_struct(
+        _emb_struct(
             "PeekEventsParams",
             [
-                ("queue", "std::string", False),
-                ("count", "std::optional<std::int64_t>", True),
+                ("queue", "String", False),
+                ("count", "std::int64_t", True),
             ],
         ),
-        _emit_struct(
+        _emb_struct(
             "PeekEventsResult",
             [
-                ("queue", "std::string", False),
+                ("queue", "String", False),
                 ("events", "std::vector<Event>", False),
             ],
         ),
-        _emit_struct(
+        _emb_struct(
             "CreateQueueParams",
             [
-                ("queue", "std::string", False),
-                ("mode", "std::optional<QueueMode>", True),
-                ("dispatch_strategy", "std::optional<DispatchStrategy>", True),
+                ("queue", "String", False),
+                ("mode", "QueueMode", True),
+                ("dispatch_strategy", "DispatchStrategy", True),
             ],
         ),
-        _emit_struct(
+        _emb_struct(
             "CreateQueueResult",
             [
-                ("queue", "std::string", False),
+                ("queue", "String", False),
                 ("mode", "QueueMode", False),
                 ("created", "bool", False),
             ],
         ),
-        _emit_struct(
+        _emb_struct(
             "AttachListenerParams",
             [
-                ("queue", "std::string", False),
+                ("queue", "String", False),
                 ("port", "std::int64_t", False),
-                ("host", "std::optional<std::string>", True),
-                ("exhaustion_timeout_ms", "std::optional<std::int64_t>", True),
-                ("max_retries", "std::optional<std::int64_t>", True),
-                ("side", "std::optional<DuplexSide>", True),
+                ("host", "String", True),
+                ("exhaustion_timeout_ms", "std::int64_t", True),
+                ("max_retries", "std::int64_t", True),
+                ("side", "DuplexSide", True),
             ],
         ),
-        _emit_struct(
+        _emb_struct(
             "AttachListenerResult",
             [
-                ("listener_id", "std::string", False),
-                ("queue", "std::string", False),
-                ("status", "std::string", False),
+                ("listener_id", "String", False),
+                ("queue", "String", False),
+                ("status", "String", False),
             ],
         ),
-        _emit_struct(
+        _emb_struct(
             "DetachListenerParams",
-            [("listener_id", "std::string", False)],
+            [("listener_id", "String", False)],
         ),
-        _emit_struct(
+        _emb_struct(
             "DetachListenerResult",
             [
-                ("listener_id", "std::string", False),
+                ("listener_id", "String", False),
                 ("detached", "bool", False),
             ],
         ),
-        _emit_struct(
+        _emb_struct(
             "ListListenersParams",
-            [("queue", "std::optional<std::string>", True)],
+            [("queue", "String", True)],
         ),
-        _emit_struct(
+        _emb_struct(
             "ListListenersResult",
             [("listeners", "std::vector<Listener>", False)],
         ),
-        _emit_struct(
+        _emb_struct(
             "QueueReadyParams",
-            [("queue", "std::string", False)],
+            [("queue", "String", False)],
         ),
-        _emit_struct(
+        _emb_struct(
             "QueueReadyResult",
             [
-                ("queue", "std::string", False),
+                ("queue", "String", False),
                 ("ready", "bool", False),
             ],
         ),
-        _emit_struct(
+        _emb_struct(
             "ListenerEventParams",
             [
-                ("queue", "std::string", False),
-                ("id", "std::string", False),
-                ("event", "nlohmann::json", False),
+                ("queue", "String", False),
+                ("id", "String", False),
+                ("event", "JsonDocument", False),
             ],
         ),
-        _emit_struct(
+        _emb_struct(
             "ListenerEventResult",
             [("status", "Status", False)],
         ),
@@ -253,139 +457,15 @@ def generate_cpp_payloads() -> None:
         "",
     ]
 
-    # Keep schema file list as a freshness anchor (must match openrpc payloads).
     _ = PAYLOAD_FILES
-
-    CPP_PAYLOADS_OUT.parent.mkdir(parents=True, exist_ok=True)
-    CPP_PAYLOADS_OUT.write_text("\n".join(chunks))
+    EMBEDDED_PAYLOADS_OUT.parent.mkdir(parents=True, exist_ok=True)
+    EMBEDDED_PAYLOADS_OUT.write_text("\n".join(chunks))
     try:
-        shown = CPP_PAYLOADS_OUT.relative_to(ROOT)
+        shown = EMBEDDED_PAYLOADS_OUT.relative_to(ROOT)
     except ValueError:
-        shown = CPP_PAYLOADS_OUT
+        shown = EMBEDDED_PAYLOADS_OUT
     print(f"wrote {shown}", flush=True)
 
 
-def generate_cpp_contracts() -> None:
-    schemas: dict[str, Any] = {}
-    common = load(COMMON_NAME)["$defs"]
-    for filename in PAYLOAD_FILES:
-        schema = load(filename)
-        schema = rewrite_refs_rust(schema)
-        assert isinstance(schema, dict)
-        schema["$defs"] = common
-        schemas[filename] = schema
-
-    catalog = json.loads((ROOT / "schema" / "openrpc.json").read_text())
-    methods: dict[str, Any] = {}
-    for method in catalog["methods"]:
-        params = method.get("params", [])
-        methods[method["name"]] = {
-            "params": Path(params[0]["schema"]["$ref"]).name if params else None,
-            "params_required": bool(params and params[0].get("required", False)),
-            "result": Path(method["result"]["schema"]["$ref"]).name,
-            "receiver": method.get("x-receiver", "server"),
-        }
-
-    schemas_json = json.dumps(schemas, sort_keys=True)
-    methods_json = json.dumps(methods, sort_keys=True)
-    if ")AIRBUS(" in schemas_json or ")AIRBUS(" in methods_json:
-        raise SystemExit("schema JSON contains raw-string delimiter )AIRBUS(")
-
-    hpp = """\
-// @generated by scripts/generate_payloads.py — do not edit by hand.
-#pragma once
-
-#include <map>
-#include <string>
-
-#include <nlohmann/json.hpp>
-
-namespace airbus {
-namespace contracts {
-
-struct MethodInfo {
-  std::string params;  // schema filename, empty if none
-  bool params_required = false;
-  std::string result;
-  std::string receiver;
-};
-
-const std::map<std::string, nlohmann::json>& schemas();
-const std::map<std::string, MethodInfo>& methods();
-
-}  // namespace contracts
-}  // namespace airbus
-"""
-
-    cpp = f"""\
-// @generated by scripts/generate_payloads.py — do not edit by hand.
-#include "airbus/contracts.hpp"
-
-namespace airbus {{
-namespace contracts {{
-namespace {{
-
-const nlohmann::json& schemas_json() {{
-  static const nlohmann::json doc = nlohmann::json::parse(R"AIRBUS({schemas_json})AIRBUS");
-  return doc;
-}}
-
-const nlohmann::json& methods_json() {{
-  static const nlohmann::json doc = nlohmann::json::parse(R"AIRBUS({methods_json})AIRBUS");
-  return doc;
-}}
-
-}}  // namespace
-
-const std::map<std::string, nlohmann::json>& schemas() {{
-  static const std::map<std::string, nlohmann::json> value = [] {{
-    std::map<std::string, nlohmann::json> out;
-    for (auto it = schemas_json().begin(); it != schemas_json().end(); ++it) {{
-      out.emplace(it.key(), it.value());
-    }}
-    return out;
-  }}();
-  return value;
-}}
-
-const std::map<std::string, MethodInfo>& methods() {{
-  static const std::map<std::string, MethodInfo> value = [] {{
-    std::map<std::string, MethodInfo> out;
-    for (auto it = methods_json().begin(); it != methods_json().end(); ++it) {{
-      const auto& m = it.value();
-      MethodInfo info;
-      if (!m.at("params").is_null()) {{
-        info.params = m.at("params").get<std::string>();
-      }}
-      info.params_required = m.at("params_required").get<bool>();
-      info.result = m.at("result").get<std::string>();
-      info.receiver = m.at("receiver").get<std::string>();
-      out.emplace(it.key(), std::move(info));
-    }}
-    return out;
-  }}();
-  return value;
-}}
-
-}}  // namespace contracts
-}}  // namespace airbus
-"""
-
-    CPP_CONTRACTS_HPP.parent.mkdir(parents=True, exist_ok=True)
-    CPP_CONTRACTS_CPP.parent.mkdir(parents=True, exist_ok=True)
-    CPP_CONTRACTS_HPP.write_text(hpp)
-    CPP_CONTRACTS_CPP.write_text(cpp)
-
-    def _shown(path: Path) -> Path | str:
-        try:
-            return path.relative_to(ROOT)
-        except ValueError:
-            return path
-
-    print(f"wrote {_shown(CPP_CONTRACTS_HPP)}", flush=True)
-    print(f"wrote {_shown(CPP_CONTRACTS_CPP)}", flush=True)
-
-
 def generate_all_cpp() -> None:
-    generate_cpp_payloads()
-    generate_cpp_contracts()
+    generate_embedded_payloads()

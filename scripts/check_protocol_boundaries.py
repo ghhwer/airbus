@@ -106,7 +106,6 @@ def check(root: Path = ROOT) -> list[str]:
     allowed = {
         "client-py/src/airbus_client/protocol.py",
         "client-py/src/airbus_client/payloads.py",
-        "client-py/src/airbus_client/contracts.py",
         "resources/ui/protocol.js",
     }
     issues = []

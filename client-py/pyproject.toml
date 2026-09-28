@@ -5,7 +5,7 @@ description = "Python client for the Airbus JSON-RPC event bus"
 readme = "README.md"
 requires-python = ">=3.13"
 license = { text = "MIT" }
-dependencies = ["jsonschema>=4.26.0"]
+dependencies = []
 authors = [{ name = "Airbus contributors" }]
 urls = { Homepage = "https://github.com/ghhwer/airbus", Repository = "https://github.com/ghhwer/airbus" }
 

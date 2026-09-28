@@ -148,12 +148,11 @@ When an event is ready for dispatch, an Airbus dispatcher worker connects to the
   "method": "on_event",
   "params": {
     "queue": "pipeline_jobs",
-    "event_id": "0191eb73-8a39-7f41-a6cd-2895b6c3109a",
+    "id": "0191eb73-8a39-7f41-a6cd-2895b6c3109a",
     "event": {
       "task_name": "reindex_search",
       "priority": 1
-    },
-    "attempt": 1
+    }
   }
 }
 ```
@@ -165,7 +164,7 @@ The listener must process the event and return a `listener_event_result`:
   "jsonrpc": "2.0",
   "id": 1,
   "result": {
-    "status": "acknowledged"
+    "status": "ok"
   }
 }
 ```

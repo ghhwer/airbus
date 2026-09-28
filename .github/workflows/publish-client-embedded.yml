@@ -1,4 +1,4 @@
-name: publish-client-cpp
+name: publish-client-embedded
 
 on:
   push:
@@ -34,9 +34,9 @@ jobs:
           tag="${GITHUB_REF_NAME}"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
-      - name: Pack C++ and PlatformIO assets
+      - name: Pack Arduino/ESP32 asset
         run: |
-          python scripts/pack_cpp_clients.py \
+          python scripts/pack_embedded_client.py \
             --version "${{ steps.ver.outputs.version }}" \
             --out-dir dist
           ls -la dist
@@ -45,8 +45,7 @@ jobs:
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
           files: |
-            dist/airbus-client-cpp-v${{ steps.ver.outputs.version }}.zip
-            dist/airbus-client-pio-v${{ steps.ver.outputs.version }}.zip
+            dist/airbus-client-arduino-esp32-v${{ steps.ver.outputs.version }}.zip
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,7 +1,7 @@
 """Public airbus_client API.
 
 Import from this package root for application use. Wire ``*Params`` / ``*Result``
-types live under ``airbus_client.payloads`` for raw RPC. ``protocol``, ``contracts``,
+types live under ``airbus_client.payloads`` for raw RPC. ``protocol``,
 ``binary``, and ``endpoint`` are operational internals.
 
 Endpoint defaults: ``AIRBUS_URL`` or ``AIRBUS_HOST``/``AIRBUS_PORT`` (else

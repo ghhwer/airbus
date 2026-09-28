@@ -1,0 +1,28 @@
+{
+  "name": "airbus-client-arduino-esp32",
+  "version": "0.0.0",
+  "description": "Airbus JSON-RPC event bus client for Arduino ESP32 (typed ArduinoJson payloads, poll-loop listener). Daemon validates schemas; this package does not ship schema catalogs.",
+  "keywords": ["airbus", "json-rpc", "esp32", "embedded", "arduino"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ghhwer/airbus.git"
+  },
+  "authors": [
+    {
+      "name": "Airbus contributors",
+      "url": "https://github.com/ghhwer/airbus"
+    }
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/ghhwer/airbus",
+  "frameworks": "arduino",
+  "platforms": "espressif32",
+  "headers": ["airbus/embedded_rpc.h", "airbus/embedded_listener.h"],
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src"
+  },
+  "dependencies": {
+    "bblanchon/ArduinoJson": "^7.0.0"
+  }
+}

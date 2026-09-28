@@ -431,7 +431,6 @@ class RpcClient:
         decode: Callable[[Any], T],
     ) -> T | Pending[T]:
         params = proto.to_wire(params)
-        proto.validate_payload(method, "params", params)
         batch = _active_batch.get()
         if batch is not None:
             return batch.enqueue_call(method, params, decode)

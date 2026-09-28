@@ -1,8 +1,9 @@
 # Airbus
 
-JSON-RPC event bus: a Rust daemon plus language clients (Python on PyPI; C++ / PlatformIO via GitHub Release assets).
+JSON-RPC event bus: a Rust daemon plus two language clients — Python on PyPI and
+Arduino/ESP32 C++ via a GitHub Release zip.
 
-This repository is the **canonical home** for Airbus (daemon, schema, client, debug UI,
+This repository is the **canonical home** for Airbus (daemon, schema, clients, debug UI,
 and container image). Other projects consume the published client and/or run the
 container — they do not need to vendor this tree.
 
@@ -13,9 +14,8 @@ container — they do not need to vendor this tree.
 ├── resources/ui/        # static debug UI (--http --resources)
 ├── src/                 # Rust daemon (app / io / proto / runtime)
 ├── tests/               # Rust unit + JS protocol tests
-├── client-py/           # Python airbus-client (publishable package)
-├── client-cpp/          # C++ client (CMake; source of both release zips)
-├── packaging/           # Release packaging templates (e.g. PlatformIO library.json)
+├── client-py/           # Python airbus-client (PyPI)
+├── client-embedded/     # Arduino/ESP32 client (PlatformIO zip)
 ├── docs/                # architecture, protocol, queues
 ├── Dockerfile           # daemon + UI image
 └── out/                 # release binary copy (local builds)
@@ -58,32 +58,29 @@ Publish (maintainers), after tagging `v*`:
 make publish-client   # requires UV_PUBLISH_TOKEN (or equivalent)
 ```
 
-## C++ / PlatformIO clients (GitHub Release assets)
+## Embedded C++ client (GitHub Release)
 
-On each `v*` tag, CI attaches two zips built from **`client-cpp/`** (PlatformIO is
-only a packaging wrapper — same sources plus `library.json`):
-
-| Asset | Use for |
-| ----- | ------- |
-| `airbus-client-cpp-vX.Y.Z.zip` | Desktop CMake / FetchContent |
-| `airbus-client-pio-vX.Y.Z.zip` | PlatformIO `lib_deps` |
+On each `v*` tag, CI attaches the Arduino/ESP32 PlatformIO zip. Schema validation is
+daemon-side only; the package ships generated ArduinoJson typed payloads.
 
 ```bash
-# Desktop
-make pack-client-cpp   # → dist/airbus-client-cpp-v*.zip + dist/airbus-client-pio-v*.zip
+make pack-client-embedded   # → dist/airbus-client-arduino-esp32-v*.zip
 ```
 
 ```ini
-; platformio.ini
+; platformio.ini (ESP32)
 lib_deps =
-  https://github.com/ghhwer/airbus/releases/download/v0.1.0/airbus-client-pio-v0.1.0.zip
+  https://github.com/ghhwer/airbus/releases/download/v0.1.0/airbus-client-arduino-esp32-v0.1.0.zip
 ```
 
 ```cpp
-#include <airbus/client.hpp>
-airbus::RpcClient client;
-assert(client.ping() == "pong");
+#include <airbus/embedded_rpc.h>
+airbus::EmbeddedRpcClient rpc;
+String err;
+assert(rpc.ping(err));
 ```
+
+See [`client-embedded/README.md`](client-embedded/README.md).
 
 ## Container
 
@@ -114,7 +111,7 @@ Published images (on version tags) go to `ghcr.io/ghhwer/airbus`.
 ```bash
 make generate   # typify → src/proto/payloads.rs
                 # datamodel-codegen → client-py/.../payloads.py
-                # scripts → client-cpp/.../payloads.hpp + contracts
+                # scripts → client-embedded/.../payloads.h
 ```
 
 Requires `cargo-typify` (`cargo install cargo-typify --version 0.8.0`) and `make setup`.
@@ -130,5 +127,3 @@ Generated sources are committed; re-run after schema edits.
 | `create_queue` | Configure / create a queue |
 | `attach_listener` / `detach_listener` / `list_listeners` | Push delivery |
 | `queue_ready` | Mode-aware readiness |
-
-Preferred application API: `Queue` (`create` / `attach` / `post` / `is_ready`).

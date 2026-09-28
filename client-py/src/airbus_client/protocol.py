@@ -1,4 +1,8 @@
-"""JSON-RPC envelopes and schema-backed payload codecs; no sockets or threads."""
+"""JSON-RPC envelopes and typed payload codecs; no sockets or threads.
+
+Runtime JSON Schema validation lives on the daemon. Clients encode/decode
+generated payload types and check JSON-RPC envelopes only.
+"""
 
 from __future__ import annotations
 
@@ -9,14 +13,10 @@ from dataclasses import fields, is_dataclass
 from enum import Enum
 from typing import Any, get_args, get_origin, get_type_hints
 
-from jsonschema import Draft202012Validator, ValidationError
-
 from airbus_client import payloads
-from airbus_client.contracts import METHODS, SCHEMAS
 
 VERSION = "2.0"
 _ABSENT = object()
-_VALIDATORS = {name: Draft202012Validator(schema) for name, schema in SCHEMAS.items()}
 
 
 class RpcError(Exception):
@@ -40,20 +40,6 @@ def to_wire(value: Any) -> Any:
     if isinstance(value, list):
         return [to_wire(item) for item in value]
     return value
-
-
-def validate_payload(method: str, kind: str, value: Any) -> None:
-    if kind == "params" and value is None and not METHODS[method]["params_required"]:
-        return
-    schema = METHODS[method][kind]
-    if schema is None:
-        if value not in (None, {}):
-            raise ValueError(f"{method} takes no parameters")
-        return
-    try:
-        _VALIDATORS[schema].validate(value)
-    except ValidationError as error:
-        raise ValueError(f"{method} {kind}: {error.message}") from error
 
 
 def _decode(model: Any, value: Any) -> Any:
@@ -82,7 +68,7 @@ def _decode(model: Any, value: Any) -> Any:
 
 
 def decode_result(method: str, model: Any, value: Any) -> Any:
-    validate_payload(method, "result", value)
+    del method  # retained for call-site parity with older clients
     return _decode(model, value)
 
 
@@ -169,9 +155,8 @@ def handle_event(body: str, callback: Callable[[dict[str, Any]], Any]) -> dict[s
     if document["method"] != "on_event":
         return None if notification else _error_response(id, -32601, "method not found")
     try:
-        validate_payload("on_event", "params", document.get("params"))
         event = _decode(payloads.ListenerEventParams, document["params"])
-    except ValueError as error:
+    except (KeyError, TypeError, ValueError) as error:
         return None if notification else _error_response(id, -32602, str(error))
     try:
         callback(to_wire(event))
@@ -180,6 +165,4 @@ def handle_event(body: str, callback: Callable[[dict[str, Any]], Any]) -> dict[s
     if notification:
         return None
     acknowledgment = payloads.ListenerEventResult(status=payloads.Status.ok)
-    result = to_wire(acknowledgment)
-    validate_payload("on_event", "result", result)
-    return {"jsonrpc": VERSION, "id": id, "result": result}
+    return {"jsonrpc": VERSION, "id": id, "result": to_wire(acknowledgment)}
