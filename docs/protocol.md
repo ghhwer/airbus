@@ -171,7 +171,21 @@ Creates and configures a named event queue.
 <-- {"jsonrpc": "2.0", "id": 3, "result": {"queue": "chan", "mode": "full-duplex", "created": true}}
 ```
 
-### 4. `post_event`
+### 4. `delete_queue`
+Removes a named queue and any attached listeners / buffered events.
+
+- **Parameters**:
+  - `queue` (string, required): Queue name (1–64 characters).
+- **Result**:
+  - `queue` (string): Name of the queue.
+  - `deleted` (boolean): `true` if the queue existed and was removed, `false` if it was already missing.
+
+```json
+--> {"jsonrpc": "2.0", "id": 4, "method": "delete_queue", "params": {"queue": "notifications"}}
+<-- {"jsonrpc": "2.0", "id": 4, "result": {"queue": "notifications", "deleted": true}}
+```
+
+### 5. `post_event`
 Publishes an arbitrary JSON payload onto a named queue.
 - **Parameters**:
   - `queue` (string, required): Name of target queue.
@@ -182,14 +196,14 @@ Publishes an arbitrary JSON payload onto a named queue.
   - `queue` (string): Name of the queue.
 
 ```json
---> {"jsonrpc": "2.0", "id": 4, "method": "post_event", "params": {"queue": "notifications", "event": {"level": "info", "msg": "Sync complete"}}}
-<-- {"jsonrpc": "2.0", "id": 4, "result": {"id": "0191eb73-8a39-7f41-a6cd-2895b6c3109a", "queue": "notifications"}}
+--> {"jsonrpc": "2.0", "id": 5, "method": "post_event", "params": {"queue": "notifications", "event": {"level": "info", "msg": "Sync complete"}}}
+<-- {"jsonrpc": "2.0", "id": 5, "result": {"id": "0191eb73-8a39-7f41-a6cd-2895b6c3109a", "queue": "notifications"}}
 
---> {"jsonrpc": "2.0", "id": 4, "method": "post_event", "params": {"queue": "chan", "event": {"msg": "hi"}, "side": "host"}}
-<-- {"jsonrpc": "2.0", "id": 4, "result": {"id": "0191eb73-8a39-7f41-a6cd-2895b6c3109a", "queue": "chan"}}
+--> {"jsonrpc": "2.0", "id": 5, "method": "post_event", "params": {"queue": "chan", "event": {"msg": "hi"}, "side": "host"}}
+<-- {"jsonrpc": "2.0", "id": 5, "result": {"id": "0191eb73-8a39-7f41-a6cd-2895b6c3109a", "queue": "chan"}}
 ```
 
-### 5. `peek_events`
+### 6. `peek_events`
 Non-destructively inspects events sitting on a queue without consuming or removing them.
 - **Parameters**:
   - `queue` (string, required): Name of queue.
@@ -199,22 +213,22 @@ Non-destructively inspects events sitting on a queue without consuming or removi
   - `events` (array): Array of objects `{"id": string, "event": object}`.
 
 ```json
---> {"jsonrpc": "2.0", "id": 5, "method": "peek_events", "params": {"queue": "notifications", "count": 2}}
-<-- {"jsonrpc": "2.0", "id": 5, "result": {"queue": "notifications", "events": [{"id": "0191eb73-8a39-7f41-a6cd-2895b6c3109a", "event": {"level": "info", "msg": "Sync complete"}}]}}
+--> {"jsonrpc": "2.0", "id": 6, "method": "peek_events", "params": {"queue": "notifications", "count": 2}}
+<-- {"jsonrpc": "2.0", "id": 6, "result": {"queue": "notifications", "events": [{"id": "0191eb73-8a39-7f41-a6cd-2895b6c3109a", "event": {"level": "info", "msg": "Sync complete"}}]}}
 ```
 
-### 6. `list_queues`
+### 7. `list_queues`
 Lists all known queues and their operational statistics.
 - **Parameters**: None
 - **Result**:
   - `queues` (array): Array of `{ name, depth, mode, listener_count }`.
 
 ```json
---> {"jsonrpc": "2.0", "id": 6, "method": "list_queues"}
-<-- {"jsonrpc": "2.0", "id": 6, "result": {"queues": [{"name": "notifications", "depth": 1, "mode": "broadcast", "listener_count": 2}]}}
+--> {"jsonrpc": "2.0", "id": 7, "method": "list_queues"}
+<-- {"jsonrpc": "2.0", "id": 7, "result": {"queues": [{"name": "notifications", "depth": 1, "mode": "broadcast", "listener_count": 2}]}}
 ```
 
-### 7. `attach_listener`
+### 8. `attach_listener`
 Registers an external client-side port listener to receive events dispatched from a queue.
 - **Parameters**:
   - `queue` (string, required): Queue name to subscribe to.
@@ -222,21 +236,21 @@ Registers an external client-side port listener to receive events dispatched fro
   - `port` (integer, required): TCP port where the listener is waiting for `on_event` calls.
   - `max_retries` (integer, optional): Delivery retry limit before marking delivery failed. Default: `3`.
   - `exhaustion_timeout_ms` (integer, optional): Timeout budget in milliseconds. Default: `10000`.
-  - `side` (string, optional): `"host"` or `"device"`. **Required** for `full-duplex` (one listener per side); **rejected** for `broadcast` / `fifo`. On `fifo` + `single_node`, a second attach is rejected.
+  - `side` (string, optional): `"host"` or `"device"`. **Required** for `full-duplex` (one listener per side); **rejected** for `broadcast` / `fifo`. On `fifo` + `single_node`, a second attach from a different host is rejected. Reattaching the same `host:port` replaces the prior registration (all modes); exclusive slots also replace when the host matches but the port changed.
 - **Result**:
   - `listener_id` (string): Generated UUIDv7 listener handle.
   - `queue` (string): Queue attached to.
   - `status` (string): `"attached"`.
 
 ```json
---> {"jsonrpc": "2.0", "id": 7, "method": "attach_listener", "params": {"queue": "notifications", "port": 19001}}
-<-- {"jsonrpc": "2.0", "id": 7, "result": {"listener_id": "0191eb74-3298-7c88-9d22-10f763ab21e0", "queue": "notifications", "status": "attached"}}
+--> {"jsonrpc": "2.0", "id": 8, "method": "attach_listener", "params": {"queue": "notifications", "port": 19001}}
+<-- {"jsonrpc": "2.0", "id": 8, "result": {"listener_id": "0191eb74-3298-7c88-9d22-10f763ab21e0", "queue": "notifications", "status": "attached"}}
 
---> {"jsonrpc": "2.0", "id": 7, "method": "attach_listener", "params": {"queue": "chan", "port": 19001, "side": "host"}}
-<-- {"jsonrpc": "2.0", "id": 7, "result": {"listener_id": "0191eb74-3298-7c88-9d22-10f763ab21e0", "queue": "chan", "status": "attached"}}
+--> {"jsonrpc": "2.0", "id": 8, "method": "attach_listener", "params": {"queue": "chan", "port": 19001, "side": "host"}}
+<-- {"jsonrpc": "2.0", "id": 8, "result": {"listener_id": "0191eb74-3298-7c88-9d22-10f763ab21e0", "queue": "chan", "status": "attached"}}
 ```
 
-### 8. `detach_listener`
+### 9. `detach_listener`
 Unregisters an attached listener by its ID.
 - **Parameters**:
   - `listener_id` (string, required): UUIDv7 of the listener.
@@ -245,11 +259,11 @@ Unregisters an attached listener by its ID.
   - `detached` (boolean): `true` if detached, `false` if not found.
 
 ```json
---> {"jsonrpc": "2.0", "id": 8, "method": "detach_listener", "params": {"listener_id": "0191eb74-3298-7c88-9d22-10f763ab21e0"}}
-<-- {"jsonrpc": "2.0", "id": 8, "result": {"listener_id": "0191eb74-3298-7c88-9d22-10f763ab21e0", "detached": true}}
+--> {"jsonrpc": "2.0", "id": 9, "method": "detach_listener", "params": {"listener_id": "0191eb74-3298-7c88-9d22-10f763ab21e0"}}
+<-- {"jsonrpc": "2.0", "id": 9, "result": {"listener_id": "0191eb74-3298-7c88-9d22-10f763ab21e0", "detached": true}}
 ```
 
-### 9. `list_listeners`
+### 10. `list_listeners`
 Lists attached listeners and their operational health.
 - **Parameters**:
   - `queue` (string, optional): Filter by queue name.
@@ -257,11 +271,11 @@ Lists attached listeners and their operational health.
   - `listeners` (array): Array of `{ id, queue, host, port, active, failure_count, side? }` (`side` present for full-duplex listeners).
 
 ```json
---> {"jsonrpc": "2.0", "id": 9, "method": "list_listeners", "params": {"queue": "notifications"}}
-<-- {"jsonrpc": "2.0", "id": 9, "result": {"listeners": [{"id": "0191eb74-3298-7c88-9d22-10f763ab21e0", "queue": "notifications", "host": "127.0.0.1", "port": 19001, "active": true, "failure_count": 0}]}}
+--> {"jsonrpc": "2.0", "id": 10, "method": "list_listeners", "params": {"queue": "notifications"}}
+<-- {"jsonrpc": "2.0", "id": 10, "result": {"listeners": [{"id": "0191eb74-3298-7c88-9d22-10f763ab21e0", "queue": "notifications", "host": "127.0.0.1", "port": 19001, "active": true, "failure_count": 0}]}}
 ```
 
-### 10. `queue_ready`
+### 11. `queue_ready`
 Reports whether a named queue is ready for its mode (missing → `ready: false`, not an error).
 - **Parameters**:
   - `queue` (string, required): Queue name.
@@ -270,11 +284,11 @@ Reports whether a named queue is ready for its mode (missing → `ready: false`,
   - `ready` (boolean): Exists for `fifo`/`broadcast`; both duplex sides attached for `full-duplex`.
 
 ```json
---> {"jsonrpc": "2.0", "id": 10, "method": "queue_ready", "params": {"queue": "notifications"}}
-<-- {"jsonrpc": "2.0", "id": 10, "result": {"queue": "notifications", "ready": true}}
+--> {"jsonrpc": "2.0", "id": 11, "method": "queue_ready", "params": {"queue": "notifications"}}
+<-- {"jsonrpc": "2.0", "id": 11, "result": {"queue": "notifications", "ready": true}}
 ```
 
-### 11. `on_event` (Listener Callback)
+### 12. `on_event` (Listener Callback)
 Inverted RPC call: **Airbus acts as the client and invokes `on_event` on the attached listener**.
 - **Tagged**: `"x-receiver": "listener"` in `openrpc.json`.
 - **Parameters** (see `listener_event_params.schema.json`):

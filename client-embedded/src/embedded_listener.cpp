@@ -141,14 +141,10 @@ void EmbeddedEventListener::handle_client(int fd, const sockaddr_in &peer) {
   }
 
   if (!is_notification) {
-    ListenerEventResult acknowledgment;
-    acknowledgment.status = Status::Ok;
-    JsonObject result = resp["result"].to<JsonObject>();
-    if (!toJson(result, acknowledgment, err)) {
-      resp.remove("result");
-      resp["error"]["code"] = -32603;
-      resp["error"]["message"] = "ack encode failed";
-    }
+    // Set ack fields directly. Going through toJson(ListenerEventResult) +
+    // Status enum overload left result={} on ESP32/ArduinoJson 7 (daemon then
+    // rejects the dial-back and exhausts the listener).
+    resp["result"]["status"] = "ok";
     String out;
     serializeJson(resp, out);
     ::send(fd, out.c_str(), out.length(), 0);

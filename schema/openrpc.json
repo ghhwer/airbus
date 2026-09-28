@@ -2,7 +2,7 @@
   "openrpc": "1.3.2",
   "info": {
     "title": "Airbus",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Method catalog for Airbus JSON-RPC. Payload shapes live under schema/payloads/; the JSON-RPC envelope is not defined here."
   },
   "methods": [
@@ -113,6 +113,26 @@
         "name": "result",
         "schema": {
           "$ref": "payloads/create_queue_result.schema.json"
+        }
+      }
+    },
+    {
+      "name": "delete_queue",
+      "summary": "Delete a named event queue",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": true,
+          "schema": {
+            "$ref": "payloads/delete_queue_params.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "payloads/delete_queue_result.schema.json"
         }
       }
     },

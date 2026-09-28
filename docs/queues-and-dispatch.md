@@ -78,13 +78,13 @@ Full-duplex (cross-route)
 - **Semantics**: Each event goes to **exactly one** listener (competing consumers).
 - **`dispatch_strategy`** (optional; default `round_robin`):
   - `round_robin` — cycle through healthy listeners; many may attach.
-  - `single_node` — **at most one** listener may attach; a second `attach_listener` fails with `fifo single_node queue already has a listener`.
+  - `single_node` — **at most one** listener may attach; a second `attach_listener` from a **different host** fails with `fifo single_node queue already has a listener`. Reattaching from the **same host** (same or new port) replaces the prior registration (crash recovery).
 - **Use cases**: Job workers, exclusive single consumer pipelines.
 
 #### 3. `full-duplex`
 - **Semantics**: Exactly one `host` and one `device` listener; each event is delivered only to the **opposite** side of the publisher.
 - **`side`**: Required on `attach_listener` / `post_event` (`host` or `device`); rejected on other modes.
-- **`dispatch_strategy`**: Must not be set. Exclusivity is always one listener per side (not controlled by strategy).
+- **`dispatch_strategy`**: Must not be set. Exclusivity is always one listener per side (not controlled by strategy). Reattaching from the same host on a side (same or new port) replaces the stale registration.
 - **Use cases**: Agent ↔ server terminal buses (e.g. IFT remote clients).
 
 ### Queue readiness (`queue_ready`)
@@ -97,6 +97,10 @@ Mode-aware readiness is decided by the engine (not re-implemented in clients):
 | `full-duplex` | Queue exists and both host and device listeners are attached |
 
 Missing queues return `{ ready: false }` (not an error). Preferred client API: `Queue.is_ready()`.
+
+### Deleting a queue
+
+`delete_queue` removes the named queue from the registry (buffered events and attached listeners go with it). Missing queues return `{ deleted: false }` (idempotent, not an error). Preferred client API: `Queue.delete()`.
 
 ---
 
@@ -211,6 +215,10 @@ Airbus manages delivery failures automatically based on per-listener configurati
    - In `broadcast` mode: The dispatcher records the failure and schedules a retry for that specific listener if `attempt < max_retries`.
    - In `fifo` mode: The event is immediately requeued and dispatched to another available listener.
 4. If an event exceeds its `exhaustion_timeout_ms` or `max_retries`, it is marked exhausted.
+5. If a listener process crashes and calls `attach_listener` again before exhaustion eviction, Airbus **replaces** the stale registration when:
+   - the new attach uses the same `host:port` (all modes), or
+   - for exclusive slots (`fifo`/`single_node`, `full-duplex` side), the new attach uses the **same host** even if the port changed.
+   A different host still fails exclusivity checks as before. `broadcast` / `fifo`/`round_robin` keep allowing multiple listeners on one host at different ports.
 
 ---
 

@@ -18,7 +18,7 @@ daemon-side only — this package does not ship schema catalogs.
 ```ini
 ; platformio.ini
 lib_deps =
-  https://github.com/ghhwer/airbus/releases/download/v0.1.0/airbus-client-arduino-esp32-v0.1.0.zip
+  https://github.com/ghhwer/airbus/releases/download/v0.1.1/airbus-client-arduino-esp32-v0.1.1.zip
 ```
 
 Dependency: [ArduinoJson](https://arduinojson.org/) v7 (declared in `library.json`).
@@ -88,6 +88,6 @@ See `examples/esp32_listener/` for a minimal sketch (includes `post_event`).
 
 ## Method surface
 
-Typed helpers: `ping`, `add`, `create_queue`, `post_event`, `list_queues`,
+Typed helpers: `ping`, `add`, `create_queue`, `delete_queue`, `post_event`, `list_queues`,
 `peek_events`, `attach_listener`, `detach_listener`, `list_listeners`, `queue_ready`,
 plus convenience `listener_is_active`. Raw `call()` for escape hatches.

@@ -13,6 +13,7 @@ const fillBar = document.getElementById("fill-bar");
 const laneEl = document.getElementById("lane");
 const listenerCountEl = document.getElementById("listener-count");
 const listenersEl = document.getElementById("listeners");
+const deleteQueueBtn = document.getElementById("delete-queue-btn");
 
 const SOFT_CAP = 32;
 const PEEK_N = 40;
@@ -78,6 +79,7 @@ function shortId(id) {
 function selectQueue(name) {
   selectedQueue = name;
   queueNameEl.value = name;
+  if (deleteQueueBtn) deleteQueueBtn.disabled = !name;
   for (const btn of queueListEl.querySelectorAll(".q-item")) {
     btn.classList.toggle("active", btn.dataset.queue === name);
   }
@@ -207,6 +209,9 @@ async function refresh(forcePeek = false) {
 
     const name = (queueNameEl.value.trim() || selectedQueue).trim();
     if (!name) {
+      selectedQueue = "";
+      if (deleteQueueBtn) deleteQueueBtn.disabled = true;
+      stageTitle.textContent = "Select a queue";
       laneEl.innerHTML = '<p class="empty">Pick a queue on the left to see ordering.</p>';
       renderListeners([]);
       return;
@@ -288,9 +293,35 @@ document.getElementById("post-json-btn").addEventListener("click", () => {
   });
 });
 document.getElementById("refresh-btn").addEventListener("click", () => refresh(true));
+
+if (deleteQueueBtn) {
+  deleteQueueBtn.addEventListener("click", () => {
+    const queue = (queueNameEl.value.trim() || selectedQueue).trim();
+    if (!queue) return;
+    if (!confirm(`Delete queue "${queue}"?`)) return;
+    deleteQueueBtn.disabled = true;
+    deleteQueueBtn.textContent = "Deleting…";
+    rpc("delete_queue", { queue })
+      .then(() => {
+        selectedQueue = "";
+        queueNameEl.value = "";
+        lastDepthByQueue.delete(queue);
+        deleteQueueBtn.textContent = "Delete";
+        return refresh(true);
+      })
+      .catch((err) => {
+        deleteQueueBtn.textContent = "Delete";
+        deleteQueueBtn.disabled = !selectedQueue;
+        setLive(false, "error");
+        totalsEl.textContent = err.message;
+      });
+  });
+}
+
 queueNameEl.addEventListener("change", () => {
   const queue = queueNameEl.value.trim();
   if (queue) selectQueue(queue);
+  else if (deleteQueueBtn) deleteQueueBtn.disabled = true;
   refresh(true);
 });
 

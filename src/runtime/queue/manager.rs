@@ -58,6 +58,15 @@ impl QueueManager {
         }
     }
 
+    /// Remove a named queue. Returns `true` if it existed.
+    pub fn delete_queue(&self, queue_name: &str) -> bool {
+        let mut map = match self.queues.lock() {
+            Ok(m) => m,
+            Err(_) => return false,
+        };
+        map.remove(queue_name).is_some()
+    }
+
     pub fn get_queue_mode(&self, queue_name: &str) -> Option<QueueMode> {
         let q = self.find_queue(queue_name).ok()?;
         let guard = q.lock().ok()?;

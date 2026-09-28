@@ -10,6 +10,7 @@ import pytest
 from airbus_client.payloads import (
     AttachListenerParams,
     CreateQueueParams,
+    DeleteQueueParams,
     ListListenersParams,
     PeekEventsParams,
     PostEventParams,
@@ -160,6 +161,26 @@ def test_create_queue_modes(rpc: RpcClient) -> None:
     assert res2.queue == q2
     assert res2.mode == QueueMode.fifo
     assert res2.created is True
+
+
+def test_delete_queue(rpc: RpcClient) -> None:
+    queue = f"delete-{uuid.uuid4()}"
+    rpc.create_queue(CreateQueueParams(queue=queue))
+    rpc.post_event(PostEventParams(queue=queue, event={"n": 1}))
+
+    deleted = rpc.delete_queue(DeleteQueueParams(queue=queue))
+    assert deleted.queue == queue
+    assert deleted.deleted is True
+
+    names = {q.name for q in rpc.list_queues().queues}
+    assert queue not in names
+
+    again = rpc.delete_queue(DeleteQueueParams(queue=queue))
+    assert again.deleted is False
+
+    with pytest.raises(RpcError) as exc:
+        rpc.post_event(PostEventParams(queue=queue, event={"n": 2}))
+    assert exc.value.code == -32602
 
 
 def test_listen_broadcast(rpc: RpcClient) -> None:

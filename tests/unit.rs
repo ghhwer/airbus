@@ -3,8 +3,8 @@ use airbus::bind_app_service;
 use airbus::io::rpc_server::RpcServer;
 use airbus::io::server::parse_listen;
 use airbus::proto::payloads::{
-    AddParams, AttachListenerParams, CreateQueueParams, DetachListenerParams, DispatchStrategy,
-    PeekEventsParams, PostEventParams, QueueMode, QueueReadyParams,
+    AddParams, AttachListenerParams, CreateQueueParams, DeleteQueueParams, DetachListenerParams,
+    DispatchStrategy, PeekEventsParams, PostEventParams, QueueMode, QueueReadyParams,
 };
 use airbus::proto::rpc::{
     self, Error, Server, INVALID_PARAMS, INVALID_REQUEST, METHOD_NOT_FOUND, PARSE_ERROR,
@@ -577,6 +577,36 @@ fn test_create_queue_lifecycle() {
 }
 
 #[test]
+fn test_delete_queue_lifecycle() {
+    let app = AppService::new();
+    app.create_queue(create_params("doomed", None, None))
+        .unwrap();
+    app.post_event(post_params("doomed", json!({"n": 1})))
+        .unwrap();
+
+    let deleted = app.delete_queue(DeleteQueueParams {
+        queue: queue_name("doomed").unwrap(),
+    });
+    assert!(deleted.deleted);
+    assert_eq!(deleted.queue.as_str(), "doomed");
+    assert!(app
+        .list_queues()
+        .queues
+        .iter()
+        .all(|q| q.name.as_str() != "doomed"));
+
+    let missing = app.delete_queue(DeleteQueueParams {
+        queue: queue_name("doomed").unwrap(),
+    });
+    assert!(!missing.deleted);
+
+    let err = app
+        .post_event(post_params("doomed", json!({"n": 2})))
+        .unwrap_err();
+    assert!(err.message.contains("does not exist"));
+}
+
+#[test]
 fn rpc_rejects_unicode_listener_id_without_panicking() {
     let request = json!({
         "jsonrpc": "2.0", "method": "detach_listener", "id": 1,
@@ -611,12 +641,13 @@ fn broadcast_detach_releases_pending_delivery_without_adding_late_listeners() {
     let first = generate_uuidv7();
     let second = generate_uuidv7();
     let late = generate_uuidv7();
-    for id in [first, second] {
+    // Distinct host:port — same address replaces under crash-recovery attach policy.
+    for (id, port) in [(first, 12345), (second, 12346)] {
         queue
             .attach_listener(ListenerRegistration::new(
                 id,
                 "127.0.0.1".into(),
-                12345,
+                port,
                 3,
                 Duration::from_secs(10),
                 None,
@@ -632,7 +663,7 @@ fn broadcast_detach_releases_pending_delivery_without_adding_late_listeners() {
         .attach_listener(ListenerRegistration::new(
             late,
             "127.0.0.1".into(),
-            12345,
+            12347,
             3,
             Duration::from_secs(10),
             None,
@@ -927,10 +958,11 @@ fn full_duplex_requires_side_and_cross_routes() {
             Some(DuplexSide::Host),
         ))
         .unwrap();
+    // Same host reattaches/replaces; exclusivity is against a different host.
     assert!(queue
         .attach_listener(ListenerRegistration::new(
             generate_uuidv7(),
-            "127.0.0.1".into(),
+            "10.0.0.2".into(),
             2,
             3,
             Duration::from_secs(10),
@@ -1044,13 +1076,227 @@ fn fifo_single_node_rejects_second_listener() {
     assert!(queue
         .attach_listener(ListenerRegistration::new(
             generate_uuidv7(),
-            "127.0.0.1".into(),
+            "127.0.0.2".into(),
             2,
             3,
             Duration::from_secs(10),
             None,
         ))
         .is_err());
+}
+
+#[test]
+fn fifo_single_node_allows_reattach_same_address() {
+    use airbus::runtime::queue::{ListenerRegistration, Queue};
+    use std::time::Duration;
+
+    let mut queue = Queue::new(QueueMode::Fifo, DispatchStrategy::SingleNode);
+    let old_id = generate_uuidv7();
+    queue
+        .attach_listener(ListenerRegistration::new(
+            old_id,
+            "127.0.0.1".into(),
+            19001,
+            3,
+            Duration::from_secs(10),
+            None,
+        ))
+        .unwrap();
+
+    let new_id = generate_uuidv7();
+    queue
+        .attach_listener(ListenerRegistration::new(
+            new_id,
+            "127.0.0.1".into(),
+            19001,
+            5,
+            Duration::from_secs(20),
+            None,
+        ))
+        .unwrap();
+
+    assert_eq!(queue.listener_count(), 1);
+    assert_eq!(queue.listeners()[0].id, new_id);
+    assert_eq!(queue.listeners()[0].max_retries, 5);
+}
+
+#[test]
+fn fifo_single_node_allows_reattach_same_host_new_port() {
+    use airbus::runtime::queue::{ListenerRegistration, Queue};
+    use std::time::Duration;
+
+    let mut queue = Queue::new(QueueMode::Fifo, DispatchStrategy::SingleNode);
+    let old_id = generate_uuidv7();
+    queue
+        .attach_listener(ListenerRegistration::new(
+            old_id,
+            "127.0.0.1".into(),
+            19001,
+            3,
+            Duration::from_secs(10),
+            None,
+        ))
+        .unwrap();
+
+    let new_id = generate_uuidv7();
+    queue
+        .attach_listener(ListenerRegistration::new(
+            new_id,
+            "127.0.0.1".into(),
+            19099,
+            3,
+            Duration::from_secs(10),
+            None,
+        ))
+        .unwrap();
+
+    assert_eq!(queue.listener_count(), 1);
+    assert_eq!(queue.listeners()[0].id, new_id);
+    assert_eq!(queue.listeners()[0].port, 19099);
+}
+
+#[test]
+fn full_duplex_allows_reattach_same_address() {
+    use airbus::proto::payloads::DuplexSide;
+    use airbus::runtime::queue::{ListenerRegistration, Queue};
+    use std::time::Duration;
+
+    let mut queue = Queue::new(QueueMode::FullDuplex, DispatchStrategy::RoundRobin);
+    let old_host = generate_uuidv7();
+    queue
+        .attach_listener(ListenerRegistration::new(
+            old_host,
+            "127.0.0.1".into(),
+            19010,
+            3,
+            Duration::from_secs(10),
+            Some(DuplexSide::Host),
+        ))
+        .unwrap();
+    queue
+        .attach_listener(ListenerRegistration::new(
+            generate_uuidv7(),
+            "127.0.0.1".into(),
+            19011,
+            3,
+            Duration::from_secs(10),
+            Some(DuplexSide::Device),
+        ))
+        .unwrap();
+
+    let new_host = generate_uuidv7();
+    queue
+        .attach_listener(ListenerRegistration::new(
+            new_host,
+            "127.0.0.1".into(),
+            19010,
+            3,
+            Duration::from_secs(10),
+            Some(DuplexSide::Host),
+        ))
+        .unwrap();
+
+    assert_eq!(queue.listener_count(), 2);
+    assert_eq!(
+        queue.listener_for_side(DuplexSide::Host).unwrap().id,
+        new_host
+    );
+    assert!(queue.listener_for_side(DuplexSide::Device).is_some());
+}
+
+#[test]
+fn full_duplex_allows_reattach_same_host_new_port() {
+    use airbus::proto::payloads::DuplexSide;
+    use airbus::runtime::queue::{ListenerRegistration, Queue};
+    use std::time::Duration;
+
+    let mut queue = Queue::new(QueueMode::FullDuplex, DispatchStrategy::RoundRobin);
+    queue
+        .attach_listener(ListenerRegistration::new(
+            generate_uuidv7(),
+            "10.0.0.5".into(),
+            19010,
+            3,
+            Duration::from_secs(10),
+            Some(DuplexSide::Host),
+        ))
+        .unwrap();
+    queue
+        .attach_listener(ListenerRegistration::new(
+            generate_uuidv7(),
+            "10.0.0.6".into(),
+            19011,
+            3,
+            Duration::from_secs(10),
+            Some(DuplexSide::Device),
+        ))
+        .unwrap();
+
+    let new_host = generate_uuidv7();
+    queue
+        .attach_listener(ListenerRegistration::new(
+            new_host,
+            "10.0.0.5".into(),
+            19110,
+            3,
+            Duration::from_secs(10),
+            Some(DuplexSide::Host),
+        ))
+        .unwrap();
+
+    assert_eq!(queue.listener_count(), 2);
+    let host = queue.listener_for_side(DuplexSide::Host).unwrap();
+    assert_eq!(host.id, new_host);
+    assert_eq!(host.port, 19110);
+    assert_eq!(
+        queue.listener_for_side(DuplexSide::Device).unwrap().port,
+        19011
+    );
+}
+
+#[test]
+fn broadcast_reattach_same_address_replaces() {
+    use airbus::runtime::queue::{ListenerRegistration, Queue};
+    use std::time::Duration;
+
+    let mut queue = Queue::new(QueueMode::Broadcast, DispatchStrategy::RoundRobin);
+    let old_id = generate_uuidv7();
+    queue
+        .attach_listener(ListenerRegistration::new(
+            old_id,
+            "127.0.0.1".into(),
+            19100,
+            3,
+            Duration::from_secs(10),
+            None,
+        ))
+        .unwrap();
+    queue
+        .attach_listener(ListenerRegistration::new(
+            generate_uuidv7(),
+            "127.0.0.1".into(),
+            19101,
+            3,
+            Duration::from_secs(10),
+            None,
+        ))
+        .unwrap();
+
+    let new_id = generate_uuidv7();
+    queue
+        .attach_listener(ListenerRegistration::new(
+            new_id,
+            "127.0.0.1".into(),
+            19100,
+            3,
+            Duration::from_secs(10),
+            None,
+        ))
+        .unwrap();
+
+    assert_eq!(queue.listener_count(), 2);
+    assert!(queue.listeners().iter().any(|l| l.id == new_id));
+    assert!(!queue.listeners().iter().any(|l| l.id == old_id));
 }
 
 #[test]

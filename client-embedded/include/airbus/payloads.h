@@ -13,6 +13,7 @@ namespace airbus {
 
 using PingResult = String;
 using AddResult = double;
+
 using AddParams = std::vector<double>;
 
 inline bool toJson(JsonVariant dest, const AddParams& value, String& /*err*/) {
@@ -26,17 +27,6 @@ inline bool fromJson(JsonVariantConst src, AddParams& value, String& err) {
   if (arr.isNull()) { err = "invalid AddParams"; return false; }
   value.clear();
   for (JsonVariantConst item : arr) value.push_back(item.as<double>());
-  return true;
-}
-
-inline bool toJson(JsonVariant dest, const PingResult& value, String& /*err*/) {
-  dest.set(value);
-  return true;
-}
-
-inline bool fromJson(JsonVariantConst src, PingResult& value, String& err) {
-  if (src.isNull()) { err = "invalid PingResult"; return false; }
-  value = src.as<String>();
   return true;
 }
 
@@ -109,28 +99,6 @@ inline bool fromJson(JsonVariantConst src, QueueMode& value, String& err) {
   return false;
 }
 
-enum class DispatchStrategy {
-  RoundRobin,
-  SingleNode,
-};
-
-inline bool toJson(JsonVariant dest, DispatchStrategy value, String& /*err*/) {
-  switch (value) {
-    case DispatchStrategy::RoundRobin: dest.set("round_robin"); return true;
-    case DispatchStrategy::SingleNode: dest.set("single_node"); return true;
-  }
-  return false;
-}
-
-inline bool fromJson(JsonVariantConst src, DispatchStrategy& value, String& err) {
-  const char* s = src.as<const char*>();
-  if (s == nullptr) { err = "invalid DispatchStrategy"; return false; }
-  if (strcmp(s, "round_robin") == 0) { value = DispatchStrategy::RoundRobin; return true; }
-  if (strcmp(s, "single_node") == 0) { value = DispatchStrategy::SingleNode; return true; }
-  err = "invalid DispatchStrategy";
-  return false;
-}
-
 enum class DuplexSide {
   Host,
   Device,
@@ -150,6 +118,28 @@ inline bool fromJson(JsonVariantConst src, DuplexSide& value, String& err) {
   if (strcmp(s, "host") == 0) { value = DuplexSide::Host; return true; }
   if (strcmp(s, "device") == 0) { value = DuplexSide::Device; return true; }
   err = "invalid DuplexSide";
+  return false;
+}
+
+enum class DispatchStrategy {
+  RoundRobin,
+  SingleNode,
+};
+
+inline bool toJson(JsonVariant dest, DispatchStrategy value, String& /*err*/) {
+  switch (value) {
+    case DispatchStrategy::RoundRobin: dest.set("round_robin"); return true;
+    case DispatchStrategy::SingleNode: dest.set("single_node"); return true;
+  }
+  return false;
+}
+
+inline bool fromJson(JsonVariantConst src, DispatchStrategy& value, String& err) {
+  const char* s = src.as<const char*>();
+  if (s == nullptr) { err = "invalid DispatchStrategy"; return false; }
+  if (strcmp(s, "round_robin") == 0) { value = DispatchStrategy::RoundRobin; return true; }
+  if (strcmp(s, "single_node") == 0) { value = DispatchStrategy::SingleNode; return true; }
+  err = "invalid DispatchStrategy";
   return false;
 }
 
@@ -195,84 +185,6 @@ inline bool fromJson(JsonObjectConst src, QueueInfo& value, String& err) {
   if (!fromJson(src["mode"], value.mode, err)) return false;
   if (!src["listener_count"].is<std::int64_t>() && !src["listener_count"].is<int>()) { err = "missing listener_count"; return false; }
   value.listener_count = src["listener_count"].as<std::int64_t>();
-  return true;
-}
-
-struct Event {
-  String id{};
-  JsonDocument event{};
-};
-
-inline bool toJson(JsonObject dest, const Event& value, String& err) {
-  dest["id"] = value.id;
-  if (!dest["event"].set(value.event.as<JsonVariantConst>())) {
-    err = "encode event";
-    return false;
-  }
-  return true;
-}
-
-inline bool fromJson(JsonObjectConst src, Event& value, String& err) {
-  if (src["id"].isNull()) { err = "missing id"; return false; }
-  value.id = src["id"].as<String>();
-  if (!src["event"].is<JsonObjectConst>() && !src["event"].is<JsonArrayConst>()) {
-    err = "missing event";
-    return false;
-  }
-  value.event.clear();
-  if (!value.event.set(src["event"])) {
-    err = "decode event";
-    return false;
-  }
-  return true;
-}
-
-struct Listener {
-  String id{};
-  String queue{};
-  String host{};
-  std::int64_t port{};
-  QueueMode mode{};
-  std::int64_t failure_count{};
-  bool active{};
-  bool has_side = false;
-  DuplexSide side{};
-};
-
-inline bool toJson(JsonObject dest, const Listener& value, String& err) {
-  dest["id"] = value.id;
-  dest["queue"] = value.queue;
-  dest["host"] = value.host;
-  dest["port"] = value.port;
-  if (!toJson(dest["mode"], value.mode, err)) return false;
-  dest["failure_count"] = value.failure_count;
-  dest["active"] = value.active;
-  if (value.has_side) {
-    if (!toJson(dest["side"], value.side, err)) return false;
-  }
-  return true;
-}
-
-inline bool fromJson(JsonObjectConst src, Listener& value, String& err) {
-  if (src["id"].isNull()) { err = "missing id"; return false; }
-  value.id = src["id"].as<String>();
-  if (src["queue"].isNull()) { err = "missing queue"; return false; }
-  value.queue = src["queue"].as<String>();
-  if (src["host"].isNull()) { err = "missing host"; return false; }
-  value.host = src["host"].as<String>();
-  if (!src["port"].is<std::int64_t>() && !src["port"].is<int>()) { err = "missing port"; return false; }
-  value.port = src["port"].as<std::int64_t>();
-  if (!fromJson(src["mode"], value.mode, err)) return false;
-  if (!src["failure_count"].is<std::int64_t>() && !src["failure_count"].is<int>()) { err = "missing failure_count"; return false; }
-  value.failure_count = src["failure_count"].as<std::int64_t>();
-  if (!src["active"].is<bool>()) { err = "missing active"; return false; }
-  value.active = src["active"].as<bool>();
-  if (src["side"].isNull()) {
-    value.has_side = false;
-  } else {
-    value.has_side = true;
-    if (!fromJson(src["side"], value.side, err)) return false;
-  }
   return true;
 }
 
@@ -373,7 +285,7 @@ struct PeekEventsParams {
 inline bool toJson(JsonObject dest, const PeekEventsParams& value, String& err) {
   dest["queue"] = value.queue;
   if (value.has_count) {
-    if (!toJson(dest["count"], value.count, err)) return false;
+    dest["count"] = value.count;
   }
   return true;
 }
@@ -386,6 +298,35 @@ inline bool fromJson(JsonObjectConst src, PeekEventsParams& value, String& err) 
   } else {
     value.has_count = true;
     value.count = src["count"].as<std::int64_t>();
+  }
+  return true;
+}
+
+struct Event {
+  String id{};
+  JsonDocument event{};
+};
+
+inline bool toJson(JsonObject dest, const Event& value, String& err) {
+  dest["id"] = value.id;
+  if (!dest["event"].set(value.event.as<JsonVariantConst>())) {
+    err = "encode event";
+    return false;
+  }
+  return true;
+}
+
+inline bool fromJson(JsonObjectConst src, Event& value, String& err) {
+  if (src["id"].isNull()) { err = "missing id"; return false; }
+  value.id = src["id"].as<String>();
+  if (!src["event"].is<JsonObjectConst>() && !src["event"].is<JsonArrayConst>()) {
+    err = "missing event";
+    return false;
+  }
+  value.event.clear();
+  if (!value.event.set(src["event"])) {
+    err = "decode event";
+    return false;
   }
   return true;
 }
@@ -482,6 +423,40 @@ inline bool fromJson(JsonObjectConst src, CreateQueueResult& value, String& err)
   return true;
 }
 
+struct DeleteQueueParams {
+  String queue{};
+};
+
+inline bool toJson(JsonObject dest, const DeleteQueueParams& value, String& err) {
+  dest["queue"] = value.queue;
+  return true;
+}
+
+inline bool fromJson(JsonObjectConst src, DeleteQueueParams& value, String& err) {
+  if (src["queue"].isNull()) { err = "missing queue"; return false; }
+  value.queue = src["queue"].as<String>();
+  return true;
+}
+
+struct DeleteQueueResult {
+  String queue{};
+  bool deleted{};
+};
+
+inline bool toJson(JsonObject dest, const DeleteQueueResult& value, String& err) {
+  dest["queue"] = value.queue;
+  dest["deleted"] = value.deleted;
+  return true;
+}
+
+inline bool fromJson(JsonObjectConst src, DeleteQueueResult& value, String& err) {
+  if (src["queue"].isNull()) { err = "missing queue"; return false; }
+  value.queue = src["queue"].as<String>();
+  if (!src["deleted"].is<bool>()) { err = "missing deleted"; return false; }
+  value.deleted = src["deleted"].as<bool>();
+  return true;
+}
+
 struct AttachListenerParams {
   String queue{};
   std::int64_t port{};
@@ -499,13 +474,13 @@ inline bool toJson(JsonObject dest, const AttachListenerParams& value, String& e
   dest["queue"] = value.queue;
   dest["port"] = value.port;
   if (value.has_host) {
-    if (!toJson(dest["host"], value.host, err)) return false;
+    dest["host"] = value.host;
   }
   if (value.has_exhaustion_timeout_ms) {
-    if (!toJson(dest["exhaustion_timeout_ms"], value.exhaustion_timeout_ms, err)) return false;
+    dest["exhaustion_timeout_ms"] = value.exhaustion_timeout_ms;
   }
   if (value.has_max_retries) {
-    if (!toJson(dest["max_retries"], value.max_retries, err)) return false;
+    dest["max_retries"] = value.max_retries;
   }
   if (value.has_side) {
     if (!toJson(dest["side"], value.side, err)) return false;
@@ -609,7 +584,7 @@ struct ListListenersParams {
 
 inline bool toJson(JsonObject dest, const ListListenersParams& value, String& err) {
   if (value.has_queue) {
-    if (!toJson(dest["queue"], value.queue, err)) return false;
+    dest["queue"] = value.queue;
   }
   return true;
 }
@@ -620,6 +595,55 @@ inline bool fromJson(JsonObjectConst src, ListListenersParams& value, String& er
   } else {
     value.has_queue = true;
     value.queue = src["queue"].as<String>();
+  }
+  return true;
+}
+
+struct Listener {
+  String id{};
+  String queue{};
+  String host{};
+  std::int64_t port{};
+  QueueMode mode{};
+  std::int64_t failure_count{};
+  bool active{};
+  bool has_side = false;
+  DuplexSide side{};
+};
+
+inline bool toJson(JsonObject dest, const Listener& value, String& err) {
+  dest["id"] = value.id;
+  dest["queue"] = value.queue;
+  dest["host"] = value.host;
+  dest["port"] = value.port;
+  if (!toJson(dest["mode"], value.mode, err)) return false;
+  dest["failure_count"] = value.failure_count;
+  dest["active"] = value.active;
+  if (value.has_side) {
+    if (!toJson(dest["side"], value.side, err)) return false;
+  }
+  return true;
+}
+
+inline bool fromJson(JsonObjectConst src, Listener& value, String& err) {
+  if (src["id"].isNull()) { err = "missing id"; return false; }
+  value.id = src["id"].as<String>();
+  if (src["queue"].isNull()) { err = "missing queue"; return false; }
+  value.queue = src["queue"].as<String>();
+  if (src["host"].isNull()) { err = "missing host"; return false; }
+  value.host = src["host"].as<String>();
+  if (!src["port"].is<std::int64_t>() && !src["port"].is<int>()) { err = "missing port"; return false; }
+  value.port = src["port"].as<std::int64_t>();
+  if (!fromJson(src["mode"], value.mode, err)) return false;
+  if (!src["failure_count"].is<std::int64_t>() && !src["failure_count"].is<int>()) { err = "missing failure_count"; return false; }
+  value.failure_count = src["failure_count"].as<std::int64_t>();
+  if (!src["active"].is<bool>()) { err = "missing active"; return false; }
+  value.active = src["active"].as<bool>();
+  if (src["side"].isNull()) {
+    value.has_side = false;
+  } else {
+    value.has_side = true;
+    if (!fromJson(src["side"], value.side, err)) return false;
   }
   return true;
 }

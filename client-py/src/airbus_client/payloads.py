@@ -88,6 +88,17 @@ class CreateQueueResult:
 
 
 @dataclass
+class DeleteQueueParams:
+    queue: str
+
+
+@dataclass
+class DeleteQueueResult:
+    queue: str
+    deleted: bool
+
+
+@dataclass
 class AttachListenerParams:
     queue: str
     port: int

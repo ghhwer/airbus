@@ -1,4 +1,4 @@
-"""Thin named-queue handle — create / attach / post / readiness over Airbus RPC.
+"""Thin named-queue handle — create / delete / attach / post / readiness over Airbus RPC.
 
 Mode and side policy live in the Rust engine; this module only wraps RPC and owns
 the local listener port via ``EventListener``.
@@ -14,6 +14,7 @@ from typing import Any
 
 from airbus_client.payloads import (
     CreateQueueParams,
+    DeleteQueueParams,
     DispatchStrategy,
     DuplexSide,
     PostEventParams,
@@ -57,6 +58,13 @@ class Queue:
         )
         assert not isinstance(result, type(None))
         return bool(result.created)
+
+    def delete(self) -> bool:
+        """Delete the queue. Returns whether it existed."""
+        self.close()
+        result = self._client.delete_queue(DeleteQueueParams(queue=self.name))
+        assert not isinstance(result, type(None))
+        return bool(result.deleted)
 
     def attach(
         self,

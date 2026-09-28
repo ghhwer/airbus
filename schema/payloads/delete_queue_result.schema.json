@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://airbus.local/schema/payloads/delete_queue_result.schema.json",
+  "title": "DeleteQueueResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["queue", "deleted"],
+  "properties": {
+    "queue": {
+      "$ref": "common.schema.json#/$defs/QueueName"
+    },
+    "deleted": {
+      "type": "boolean"
+    }
+  }
+}
