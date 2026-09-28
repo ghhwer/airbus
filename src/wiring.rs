@@ -3,7 +3,7 @@
 use crate::app::{decode_params, AppService};
 use crate::io::rpc_server::RpcServer;
 use crate::proto::payloads::{
-    AddParams, AttachListenerParams, CreateQueueParams, DetachListenerParams,
+    AddParams, AttachListenerParams, CreateQueueParams, DeleteQueueParams, DetachListenerParams,
     ListListenersParams, PeekEventsParams, PostEventParams, QueueReadyParams,
 };
 use crate::proto::rpc::Error;
@@ -30,6 +30,14 @@ pub fn bind_app_service(server: &mut RpcServer, app: Arc<AppService>) {
             .create_queue(typed)
             .map_err(|e| Error::invalid_params(e.to_string()))?;
         Ok(serde_json::to_value(result).expect("CreateQueueResult serializes"))
+    });
+
+    let delete_app = Arc::clone(&app);
+    server.route("delete_queue", move |params| {
+        let typed: DeleteQueueParams =
+            decode_params(&params).map_err(|e| Error::invalid_params(e.to_string()))?;
+        Ok(serde_json::to_value(delete_app.delete_queue(typed))
+            .expect("DeleteQueueResult serializes"))
     });
 
     let post_app = Arc::clone(&app);

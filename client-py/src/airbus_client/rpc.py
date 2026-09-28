@@ -17,6 +17,8 @@ from airbus_client.payloads import (
     AttachListenerResult,
     CreateQueueParams,
     CreateQueueResult,
+    DeleteQueueParams,
+    DeleteQueueResult,
     DetachListenerParams,
     DetachListenerResult,
     DuplexSide,
@@ -346,6 +348,15 @@ class RpcClient:
             "create_queue",
             params,
             partial(proto.decode_result, "create_queue", CreateQueueResult),
+        )
+
+    def delete_queue(
+        self, params: DeleteQueueParams
+    ) -> DeleteQueueResult | Pending[DeleteQueueResult]:
+        return self._invoke(
+            "delete_queue",
+            params,
+            partial(proto.decode_result, "delete_queue", DeleteQueueResult),
         )
 
     def post_event(self, params: PostEventParams) -> PostEventResult | Pending[PostEventResult]:

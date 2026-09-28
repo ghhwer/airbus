@@ -93,3 +93,13 @@ def test_fifo_and_broadcast_ready_when_queue_exists(rpc: RpcClient) -> None:
     # Engine RPC matches handle
     assert rpc.queue_ready(QueueReadyParams(queue=fifo_name)).ready is True
     rpc.create_queue(CreateQueueParams(queue=f"raw-{uuid.uuid4()}", mode=QueueMode.fifo))
+
+
+def test_queue_delete(rpc: RpcClient) -> None:
+    name = f"gone-{uuid.uuid4()}"
+    q = Queue(name, client=rpc)
+    assert q.create(QueueMode.broadcast) is True
+    assert q.delete() is True
+    assert q.is_ready() is False
+    assert q.delete() is False
+    assert q.post({"n": 1}) is False

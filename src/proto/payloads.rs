@@ -88,6 +88,8 @@ pub enum AirbusPayloadRoot {
     PeekEventsResult(PeekEventsResult),
     CreateQueueParams(CreateQueueParams),
     CreateQueueResult(CreateQueueResult),
+    DeleteQueueParams(DeleteQueueParams),
+    DeleteQueueResult(DeleteQueueResult),
     AttachListenerParams(AttachListenerParams),
     AttachListenerResult(AttachListenerResult),
     DetachListenerParams(DetachListenerParams),
@@ -177,6 +179,16 @@ impl ::std::convert::From<CreateQueueParams> for AirbusPayloadRoot {
 impl ::std::convert::From<CreateQueueResult> for AirbusPayloadRoot {
     fn from(value: CreateQueueResult) -> Self {
         Self::CreateQueueResult(value)
+    }
+}
+impl ::std::convert::From<DeleteQueueParams> for AirbusPayloadRoot {
+    fn from(value: DeleteQueueParams) -> Self {
+        Self::DeleteQueueParams(value)
+    }
+}
+impl ::std::convert::From<DeleteQueueResult> for AirbusPayloadRoot {
+    fn from(value: DeleteQueueResult) -> Self {
+        Self::DeleteQueueResult(value)
     }
 }
 impl ::std::convert::From<AttachListenerParams> for AirbusPayloadRoot {
@@ -320,6 +332,19 @@ pub struct CreateQueueParams {
 pub struct CreateQueueResult {
     pub created: bool,
     pub mode: QueueMode,
+    pub queue: QueueName,
+}
+#[doc = "`DeleteQueueParams`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct DeleteQueueParams {
+    pub queue: QueueName,
+}
+#[doc = "`DeleteQueueResult`"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct DeleteQueueResult {
+    pub deleted: bool,
     pub queue: QueueName,
 }
 #[doc = "`DetachListenerParams`"]

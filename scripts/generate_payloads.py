@@ -36,6 +36,8 @@ PAYLOAD_FILES = [
     "peek_events_result.schema.json",
     "create_queue_params.schema.json",
     "create_queue_result.schema.json",
+    "delete_queue_params.schema.json",
+    "delete_queue_result.schema.json",
     "attach_listener_params.schema.json",
     "attach_listener_result.schema.json",
     "detach_listener_params.schema.json",
@@ -422,7 +424,6 @@ def generate_embedded() -> None:
     cpp_codegen.PAYLOAD_FILES = PAYLOAD_FILES
     cpp_codegen.EMBEDDED_PAYLOADS_OUT = EMBEDDED_PAYLOADS_OUT
     cpp_codegen.load = load
-    cpp_codegen.rewrite_refs_rust = rewrite_refs_rust
     cpp_codegen.generate_all_cpp()
 
 

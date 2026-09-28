@@ -35,6 +35,9 @@ class EmbeddedRpcClient {
   bool create_queue(const CreateQueueParams &params, CreateQueueResult &result,
                     String &err);
 
+  bool delete_queue(const DeleteQueueParams &params, DeleteQueueResult &result,
+                    String &err);
+
   bool post_event(const PostEventParams &params, PostEventResult &result,
                   String &err);
 

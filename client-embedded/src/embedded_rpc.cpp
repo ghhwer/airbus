@@ -171,6 +171,11 @@ bool EmbeddedRpcClient::create_queue(const CreateQueueParams &params,
   return invoke_object("create_queue", params, result, err);
 }
 
+bool EmbeddedRpcClient::delete_queue(const DeleteQueueParams &params,
+                                     DeleteQueueResult &result, String &err) {
+  return invoke_object("delete_queue", params, result, err);
+}
+
 bool EmbeddedRpcClient::post_event(const PostEventParams &params,
                                    PostEventResult &result, String &err) {
   return invoke_object("post_event", params, result, err);

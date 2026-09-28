@@ -1,12 +1,12 @@
 use crate::proto::payloads::{
     AddParams, AddResult, AttachListenerParams, AttachListenerResult,
-    AttachListenerResultListenerId, CreateQueueParams, CreateQueueResult, DetachListenerParams,
-    DetachListenerResult, DetachListenerResultListenerId, DispatchStrategy, EventObject,
-    ListListenersParams, ListListenersResult, ListListenersResultListenersItem,
-    ListListenersResultListenersItemId, ListQueuesResult, PeekEventsParams, PeekEventsResult,
-    PeekEventsResultEventsItem, PeekEventsResultEventsItemId, PingResult, PostEventParams,
-    PostEventResult, PostEventResultId, QueueInfo, QueueMode, QueueName, QueueReadyParams,
-    QueueReadyResult,
+    AttachListenerResultListenerId, CreateQueueParams, CreateQueueResult, DeleteQueueParams,
+    DeleteQueueResult, DetachListenerParams, DetachListenerResult, DetachListenerResultListenerId,
+    DispatchStrategy, EventObject, ListListenersParams, ListListenersResult,
+    ListListenersResultListenersItem, ListListenersResultListenersItemId, ListQueuesResult,
+    PeekEventsParams, PeekEventsResult, PeekEventsResultEventsItem, PeekEventsResultEventsItemId,
+    PingResult, PostEventParams, PostEventResult, PostEventResultId, QueueInfo, QueueMode,
+    QueueName, QueueReadyParams, QueueReadyResult,
 };
 use crate::runtime::queue::QueueManager;
 use crate::runtime::UuidV7;
@@ -90,6 +90,14 @@ impl AppService {
             mode,
             queue: params.queue,
         })
+    }
+
+    pub fn delete_queue(&self, params: DeleteQueueParams) -> DeleteQueueResult {
+        let deleted = self.queue_manager.delete_queue(params.queue.as_str());
+        DeleteQueueResult {
+            deleted,
+            queue: params.queue,
+        }
     }
 
     pub fn post_event(&self, params: PostEventParams) -> Result<PostEventResult, InvalidParams> {

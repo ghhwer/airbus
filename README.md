@@ -70,7 +70,7 @@ make pack-client-embedded   # → dist/airbus-client-arduino-esp32-v*.zip
 ```ini
 ; platformio.ini (ESP32)
 lib_deps =
-  https://github.com/ghhwer/airbus/releases/download/v0.1.0/airbus-client-arduino-esp32-v0.1.0.zip
+  https://github.com/ghhwer/airbus/releases/download/v0.1.1/airbus-client-arduino-esp32-v0.1.1.zip
 ```
 
 ```cpp
@@ -125,5 +125,6 @@ Generated sources are committed; re-run after schema edits.
 | `list_queues` | Queue inventory |
 | `peek_events` | Non-destructive peek |
 | `create_queue` | Configure / create a queue |
+| `delete_queue` | Delete a queue (and its listeners / events) |
 | `attach_listener` / `detach_listener` / `list_listeners` | Push delivery |
 | `queue_ready` | Mode-aware readiness |

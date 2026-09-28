@@ -65,6 +65,7 @@ airbus/
   - `ping(&self) -> PingResult`
   - `add(&self, params: AddParams) -> AddResult`
   - `create_queue(&self, params: CreateQueueParams) -> Result<CreateQueueResult, InvalidParams>`
+  - `delete_queue(&self, params: DeleteQueueParams) -> DeleteQueueResult`
   - `post_event(&self, params: PostEventParams) -> Result<PostEventResult, InvalidParams>`
   - `peek_events(&self, params: PeekEventsParams) -> Result<PeekEventsResult, InvalidParams>`
   - `list_queues(&self) -> ListQueuesResult`
@@ -96,6 +97,7 @@ pub fn bind_app_service(rpc: &mut RpcServer, app: Arc<AppService>) {
     rpc.register("ping", ...);
     rpc.register("add", ...);
     rpc.register("create_queue", ...);
+    rpc.register("delete_queue", ...);
     rpc.register("post_event", ...);
     rpc.register("peek_events", ...);
     rpc.register("list_queues", ...);
