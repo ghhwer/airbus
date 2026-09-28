@@ -4,10 +4,6 @@ dist/
 schema/payloads/bundle.schema.json
 schema/payloads/python_bundle.schema.json
 
-# Vendored by pack / local cmake (not committed)
-client-cpp/third_party/nlohmann/
-client-cpp/build/
-
 # Python
 __pycache__/
 *.py[oc]
@@ -41,3 +37,4 @@ credentials.json
 *.tar
 airbus-release
 airbus-ci
+.tmp*

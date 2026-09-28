@@ -61,31 +61,19 @@ jobs:
           docker rm "${cid}"
           cargo audit bin ./airbus-ci
 
-  client-cpp:
+  client-embedded:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Pack release assets
-        run: python scripts/pack_cpp_clients.py --out-dir dist
-      - name: Configure and build C++ client from packed asset
+      - name: Pack Arduino/ESP32 release asset
+        run: python scripts/pack_embedded_client.py --out-dir dist
+      - name: Check Arduino/ESP32 asset layout
         run: |
-          version="$(tr -d '[:space:]' < client-cpp/VERSION)"
-          unzip -q "dist/airbus-client-cpp-v${version}.zip" -d /tmp
-          cmake -S "/tmp/airbus-client-cpp-v${version}" -B /tmp/airbus-cpp-build \
-            -DAIRBUS_CLIENT_BUILD_EXAMPLES=ON \
-            -DAIRBUS_CLIENT_BUILD_TESTS=OFF \
-            -DAIRBUS_CLIENT_FETCH_JSON=OFF
-          cmake --build /tmp/airbus-cpp-build
-      - name: Check PlatformIO asset layout
-        run: |
-          version="$(tr -d '[:space:]' < client-cpp/VERSION)"
-          unzip -l "dist/airbus-client-pio-v${version}.zip" | grep -E 'library.json|include/airbus/client.hpp|third_party/nlohmann/json.hpp|transport_posix.cpp'
-          ! unzip -l "dist/airbus-client-pio-v${version}.zip" | grep -qi arduino
-          unzip -l "dist/airbus-client-cpp-v${version}.zip" | grep transport_posix.cpp
-      - name: Build daemon and run C++ client tests
-        run: make test-client-cpp
+          version="$(tr -d '[:space:]' < client-embedded/VERSION)"
+          unzip -l "dist/airbus-client-arduino-esp32-v${version}.zip" | grep -E 'library.json|include/airbus/embedded_rpc.h|include/airbus/embedded_listener.h|include/airbus/payloads.h|src/embedded_rpc.cpp'
+          ! unzip -l "dist/airbus-client-arduino-esp32-v${version}.zip" | grep -qi 'nlohmann\|transport_posix\|contracts.cpp\|CMakeLists'
+          ! test -f "dist/airbus-client-cpp-v${version}.zip"
+          ! test -f "dist/airbus-client-desktop-pio-v${version}.zip"
