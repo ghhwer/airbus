@@ -8,6 +8,8 @@ on:
 jobs:
   # Require this check on main (Settings → Branches → Require status checks → uv-lock-check).
   # Ensures the lock is in sync and only references public PyPI hosts (not Verigate).
+  # To fix a Verigate-authored lock without upgrading packages:
+  #   python scripts/rewrite_uv_lock_to_public.py
   uv-lock-check:
     runs-on: ubuntu-latest
     steps:
@@ -25,23 +27,7 @@ jobs:
           unset UV_INDEX_URL UV_EXTRA_INDEX_URL UV_DEFAULT_INDEX || true
           uv lock --check
       - name: Assert public PyPI registries only
-        run: |
-          set -euo pipefail
-          # Fail on any registry/URL host in uv.lock that is not public PyPI.
-          bad="$(
-            grep -Eho 'https?://[^/"'"'"' ]+' uv.lock \
-              | sed -E 's#https?://##' \
-              | cut -d/ -f1 \
-              | sort -u \
-              | grep -Ev '^(pypi\.org|files\.pythonhosted\.org)$' \
-              || true
-          )"
-          if [ -n "${bad}" ]; then
-            echo "::error::uv.lock references non-public hosts:"
-            echo "${bad}"
-            exit 1
-          fi
-          echo "All uv.lock hosts are public PyPI"
+        run: python scripts/rewrite_uv_lock_to_public.py --check
 
   rust:
     runs-on: ubuntu-latest

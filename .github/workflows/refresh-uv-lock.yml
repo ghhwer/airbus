@@ -1,4 +1,5 @@
-# Regenerates uv.lock against public PyPI on feat/** pushes and commits it back.
+# Rewrites private mirror hosts in uv.lock to public PyPI without changing
+# resolved versions/hashes (see scripts/rewrite_uv_lock_to_public.py).
 #
 # Required secret: UV_LOCK_BOT_TOKEN
 #   Fine-grained PAT (or GitHub App installation token) with Contents: Read and write
@@ -45,40 +46,15 @@ jobs:
           token: ${{ secrets.UV_LOCK_BOT_TOKEN }}
           fetch-depth: 0
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
 
-      - name: Regenerate uv.lock against public PyPI
-        env:
-          # Clear any Verigate / private index overrides so the lock uses pypi.org.
-          UV_INDEX_URL: ""
-          UV_EXTRA_INDEX_URL: ""
-          UV_DEFAULT_INDEX: ""
-        run: |
-          set -euo pipefail
-          unset UV_INDEX_URL UV_EXTRA_INDEX_URL UV_DEFAULT_INDEX || true
-          # Plain `uv lock` keeps existing registry URLs from a Verigate-authored
-          # lockfile. Delete first so resolution is forced against public PyPI.
-          rm -f uv.lock
-          uv lock
+      - name: Rewrite private lock URLs to public PyPI (versions unchanged)
+        run: python scripts/rewrite_uv_lock_to_public.py
 
       - name: Assert public PyPI registries only
-        run: |
-          set -euo pipefail
-          bad="$(
-            grep -Eho 'https?://[^/"'"'"' ]+' uv.lock \
-              | sed -E 's#https?://##' \
-              | cut -d/ -f1 \
-              | sort -u \
-              | grep -Ev '^(pypi\.org|files\.pythonhosted\.org)$' \
-              || true
-          )"
-          if [ -n "${bad}" ]; then
-            echo "::error::Regenerated uv.lock still references non-public hosts:"
-            echo "${bad}"
-            exit 1
-          fi
+        run: python scripts/rewrite_uv_lock_to_public.py --check
 
       - name: Commit and push if uv.lock changed
         env:
@@ -94,5 +70,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add uv.lock
-          git commit -m "chore: refresh uv.lock for public PyPI"
+          git commit -m "chore: rewrite uv.lock URLs to public PyPI"
           git push origin "HEAD:${BRANCH}"
