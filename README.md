@@ -1,159 +1,112 @@
 # Airbus
 
-JSON-RPC event bus: a Rust daemon plus language clients — Python on PyPI, async Rust on
-crates.io, and Arduino/ESP32 C++ via a GitHub Release zip.
+**Airbus** is a small JSON-RPC event bus over TCP. Single daemon (or container): Create named queues, publish events, and attach listeners
+that get push deliveries. 
+Easy to implement with typed clients for **Python**, **async Rust**, and
+**Arduino/ESP32**.
 
-This repository is the **canonical home** for Airbus (daemon, schema, clients, debug UI,
-and container image). Other projects consume the published client and/or run the
-container — they do not need to vendor this tree.
+Example use-cases:
 
-```
-.
-├── schema/              # payload SOT (JSON Schema + OpenRPC catalog)
-├── scripts/             # codegen + protocol boundary checks + release packing
-├── resources/ui/        # static debug UI (--http --resources)
-├── src/                 # Rust daemon (app / io / proto / runtime)
-├── tests/               # Rust unit + JS protocol tests
-├── client-py/           # Python airbus-client (PyPI)
-├── client-rs/           # Async Rust airbus-client (crates.io)
-├── client-embedded/     # Arduino/ESP32 client (PlatformIO zip)
-├── docs/                # architecture, protocol, queues
-├── Dockerfile           # daemon + UI image
-└── out/                 # release binary copy (local builds)
-```
+- An ESP32 and a Python process on a lab network exchanging sensor readings
+over a `full-duplex` queue
+- A few local workers competing for jobs on a `fifo` queue.
+- Service fan-out (`broadcast`) to several listeners on the same network or machine.
 
-Docs: [overview](docs/overview.md) · [architecture](docs/architecture.md) ·
-[protocol](docs/protocol.md) · [queues](docs/queues-and-dispatch.md)
+![Airbus: Python, Rust, and ESP32 share JSON-RPC on :9097; browser debug UI on :9098](docs/assets/overview.svg)
 
-## Quick start (local)
+## What you get (and what you don’t)
 
-```bash
-make setup    # uv workspace (airbus-client + codegen deps)
-make build    # → out/airbus
-make run      # TCP 0.0.0.0:9097 + HTTP UI :9098
-make test
-```
+**Good fit when you want**
+
+- A single binary / container and a JSON-RPC API (schema-backed OpenRPC)
+- Named queues with dedicated modes: 
+  - fan-out (`broadcast`)
+  - competing workers
+  (`fifo`)
+  - host↔device cross-route (`full-duplex`)
+- Push delivery to listeners (daemon dials your port with `on_event` + ack),
+retries / timeouts, non-destructive `peek_events`
+- The same contract from Python, Rust, or an ESP32 sketch
+- A browser debug UI on `:9098`
+
+**Not a substitute for**
+
+- Kafka / Pulsar / large NATS clusters (partitions, retention, multi-DC, ops
+tooling)
+- RabbitMQ / SQS as a durable enterprise broker (disk persistence, AMQP
+ecosystems, cloud SLA)
+- Redis Streams as a general-purpose data store
+
+Airbus keeps state **in memory** for the process lifetime. Restart clears
+queues. Delivery is best-effort with retries to attached listeners — not
+exactly-once log replication. Treat it as a **local/lab/service bus**, not a
+durable event store.
+
+Deeper semantics: [Queues & dispatch](docs/queues-and-dispatch.md) ·
+[Overview](docs/overview.md).
+
+---
+
+
+
+## Getting started
+
+
+
+### (Option A) Point your agent here and chat about it
+
+Paste this into your favorite AI Assistent and ask how to adopt Airbus
+for your stack:
 
 ```text
-airbus --listen [host:]port [--http [host:]port --resources DIR]
+Check `https://github.com/ghhwer/airbus` and read "docs/agents/README.md" to understand what this is.
+I want to chat about this and discuss how this fits into my stack.
 ```
 
-## Python client (PyPI)
+If you are an agent just go to: `[docs/agents/](docs/agents/README.md)`.
+
+### (Option B) Run it yourself (Docker + Python)
+
+**1. Start the daemon using docker**
+`[ghcr.io/ghhwer/airbus](https://github.com/ghhwer/airbus/pkgs/container/airbus)`):
+
+```bash
+docker run --rm -p 9097:9097 -p 9098:9098 ghcr.io/ghhwer/airbus:latest
+```
+
+RPC on **9097**, debug UI at [http://127.0.0.1:9098/](http://127.0.0.1:9098/).
+Clients default to `127.0.0.1:9097`, or set `AIRBUS_URL` / `AIRBUS_HOST` +
+`AIRBUS_PORT`.
+
+**2. Post an event using python** (Python):
 
 ```bash
 pip install airbus-client
 ```
 
 ```python
-from airbus_client import RpcClient
+from airbus_client import Queue, QueueMode
 
-client = RpcClient()  # AIRBUS_URL or AIRBUS_HOST / AIRBUS_PORT
-assert client.ping() == "pong"
+q = Queue("jobs")          # uses AIRBUS_URL / host+port env
+q.create(QueueMode.fifo)
+q.attach(lambda e: print(e["event"]))
+q.post({"type": "hello"})
 ```
 
-Publish (maintainers), after tagging `v*`:
+Other languages: [Rust](docs/clients/rust.md) · [Arduino/ESP32](docs/clients/embedded.md) ·
+all clients in `[docs/clients/](docs/clients/README.md)`.
 
-```bash
-# Trusted Publisher / uv publish from CI (see .github/workflows/publish-client.yml)
-# or locally:
-make publish-client   # requires UV_PUBLISH_TOKEN (or equivalent)
-```
+Want to contribute? See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Rust client (crates.io)
+---
 
-```bash
-cargo add airbus-client
-```
+## Docs
 
-```rust
-use airbus_client::RpcClient;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let client = RpcClient::from_env()?;
-    assert_eq!(client.ping().await?.as_str(), "pong");
-    Ok(())
-}
-```
+| If you are…                              | Start here                                                                                                    |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Integrating via API / clients            | [Client usage](docs/clients/README.md) · [Queues](docs/queues-and-dispatch.md) · [Protocol](docs/protocol.md) |
+| An AI agent helping someone adopt Airbus | `[docs/agents/](docs/agents/README.md)`                                                                       |
+| An AI agent contributing to this repo    | [AGENTS.md](AGENTS.md) · [CONTRIBUTING.md](CONTRIBUTING.md)                                                   |
 
-Publish (maintainers), after tagging `v*`:
 
-```bash
-# Trusted Publishing from CI (see .github/workflows/publish-client-rs.yml)
-# One-time: create a crates.io pending publisher for ghhwer/airbus → publish-client-rs.yml
-# or locally:
-make publish-client-rs
-```
-
-See [`client-rs/README.md`](client-rs/README.md).
-
-## Embedded C++ client (GitHub Release)
-
-On each `v*` tag, CI attaches the Arduino/ESP32 PlatformIO zip. Schema validation is
-daemon-side only; the package ships generated ArduinoJson typed payloads.
-
-```bash
-make pack-client-embedded   # → dist/airbus-client-arduino-esp32-v*.zip
-```
-
-```ini
-; platformio.ini (ESP32)
-lib_deps =
-  https://github.com/ghhwer/airbus/releases/download/v0.1.1/airbus-client-arduino-esp32-v0.1.1.zip
-```
-
-```cpp
-#include <airbus/embedded_rpc.h>
-airbus::EmbeddedRpcClient rpc;
-String err;
-assert(rpc.ping(err));
-```
-
-See [`client-embedded/README.md`](client-embedded/README.md).
-
-## Container
-
-```bash
-make docker
-make docker-run
-# or
-docker compose up --build
-```
-
-Published images (on version tags) go to `ghcr.io/ghhwer/airbus`.
-
-| Port | Role |
-| ---- | ---- |
-| `9097` | TCP JSON-RPC |
-| `9098` | HTTP debug UI + `POST /rpc` |
-
-## Environment
-
-| Variable | Default | Purpose |
-| -------- | ------- | ------- |
-| `AIRBUS_URL` | `127.0.0.1:9097` | Client TCP endpoint (`host:port`) |
-| `AIRBUS_HOST` / `AIRBUS_PORT` | `127.0.0.1` / `9097` | Client fallbacks |
-| `AIRBUS_BIN` | `out/airbus` | Path used by tests / helpers |
-
-## Schema / codegen
-
-```bash
-make generate   # typify → src/proto/payloads.rs + client-rs/src/payloads.rs
-                # datamodel-codegen → client-py/.../payloads.py
-                # scripts → client-embedded/.../payloads.h
-```
-
-Requires `cargo-typify` (`cargo install cargo-typify --version 0.8.0`) and `make setup`.
-Generated sources are committed; re-run after schema edits.
-
-## Queue methods (summary)
-
-| Method | Behavior |
-| ------ | -------- |
-| `post_event` | Publish `{ queue, event }` → `{ id, queue }` |
-| `list_queues` | Queue inventory |
-| `peek_events` | Non-destructive peek |
-| `create_queue` | Configure / create a queue |
-| `delete_queue` | Delete a queue (and its listeners / events) |
-| `attach_listener` / `detach_listener` / `list_listeners` | Push delivery |
-| `queue_ready` | Mode-aware readiness |

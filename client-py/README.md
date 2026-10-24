@@ -14,4 +14,5 @@ assert client.ping() == "pong"
 ```
 
 The daemon is distributed separately (container image or `cargo`/`make build`).
-See the [repository README](https://github.com/ghhwer/airbus) for run instructions.
+See the [repository README](https://github.com/ghhwer/airbus) for run instructions and
+[docs/clients/python.md](../docs/clients/python.md) for usage (Queue, listen, batch).

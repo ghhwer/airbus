@@ -65,7 +65,8 @@ void loop() {
 }
 ```
 
-See `examples/esp32_listener/` for a minimal sketch (includes `post_event`).
+See `examples/esp32_listener/` for a minimal sketch (includes `post_event`), and
+[docs/clients/embedded.md](../docs/clients/embedded.md) for the full usage guide.
 
 ## Design notes
 

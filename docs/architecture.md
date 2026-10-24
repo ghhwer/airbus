@@ -1,16 +1,17 @@
 # Airbus Architecture & Runtime
 
-This document details the internal architecture, layer composition, runtime engine, and
-concurrency model of the Airbus event bus.
+This document maps layer boundaries and how work moves through the daemon.
+Module and type detail lives in `src/` (and contracts in `schema/`) — open the
+tree when you need implementation.
 
 ## Design Philosophy
 
 Airbus is structured around **composition over inheritance** and **strict boundary enforcement**:
 
-1. **Protocol purity**: The application layer (`AppService`) has zero awareness of TCP sockets, byte framing, or JSON-RPC envelope envelopes. It consumes strongly-typed Rust structs and returns strongly-typed results.
-2. **Envelope isolation**: Envelopes (`jsonrpc`, `id`, `method`, `params`, `result`, `error`) are parsed and constructed exclusively in `src/proto/rpc.rs`. Application code never inspects or constructs JSON-RPC wire envelopes.
-3. **Contract Single Source of Truth**: All data models originate in `schema/` and generate Rust and Python code. Neither layer creates manual data duplicates.
-4. **Decoupled dispatch**: Queues decouple publishers from consumers. Publishers receive an immediate acknowledgment with a UUIDv7 event identifier; dispatch workers deliver events asynchronously to registered listeners.
+1. **Protocol purity**: The application layer has zero awareness of TCP sockets, byte framing, or JSON-RPC envelopes. It consumes strongly-typed structs and returns strongly-typed results.
+2. **Envelope isolation**: Envelopes (`jsonrpc`, `id`, `method`, `params`, `result`, `error`) are parsed and constructed only in the protocol layer. Application and runtime code never build or inspect wire envelopes.
+3. **Contract Single Source of Truth**: Data models originate in `schema/` and generate client/daemon types. Layers must not hand-duplicate those shapes.
+4. **Decoupled dispatch**: Queues decouple publishers from consumers. Publishers get an immediate ack with a UUIDv7 event id; dispatch workers deliver asynchronously to registered listeners.
 
 ## Layer Overview
 
@@ -18,98 +19,36 @@ Airbus is structured around **composition over inheritance** and **strict bounda
 airbus/
 ├── schema/             # Contract SOT (JSON Schema + OpenRPC)
 ├── scripts/            # Codegen & protocol boundary enforcement
-├── resources/ui/       # Static web debug UI & browser RPC adapter
+├── resources/ui/       # Static debug UI (same JSON-RPC over HTTP)
 ├── src/
-│   ├── app/            # AppService: application methods (ping, post_event, etc.)
-│   ├── io/             # TCP socket server, HTTP server, RpcServer adapter, logging
-│   ├── proto/          # JSON-RPC envelope parsing + generated payload types
-│   ├── runtime/        # QueueManager, Queue, Dispatcher, Delivery, UUIDv7
-│   ├── wiring.rs       # Composition root: wires AppService onto RpcServer
-│   ├── lib.rs          # Library exports
-│   └── main.rs         # CLI parsing, server bootstrap, signal handling
-└── client-py/          # Python airbus-client package (uv workspace member)
+│   ├── app/            # Application methods → runtime
+│   ├── io/             # TCP / HTTP transport adapters
+│   ├── proto/          # Envelope handling + generated payloads
+│   ├── runtime/        # Queues, dispatch, delivery, UUIDv7
+│   ├── wiring.rs       # Bind app handlers onto the RPC server
+│   ├── lib.rs
+│   └── main.rs         # CLI, bootstrap, signals
+└── client-*/           # Language SDKs (Python, Rust, embedded, …)
 ```
 
-| Layer | Module Path | Responsibility |
-| ----- | ----------- | -------------- |
-| **Schema** | `schema/` | JSON Schema payload definitions (`payloads/*.schema.json`) and OpenRPC method catalog (`openrpc.json`). |
-| **I/O & Transport** | `src/io/` | TCP listener (`server.rs`), socket utilities (`net.rs`), HTTP server (`http_server.rs`), RPC adapter (`rpc_server.rs`), and stderr logger (`log.rs`). |
-| **Protocol** | `src/proto/` | JSON-RPC 2.0 wire document handling (`rpc.rs`) and generated payload types (`payloads.rs`). |
-| **Runtime Engine** | `src/runtime/` | Core queuing engine: `QueueManager`, `Queue`, `Dispatcher`, delivery tracking, worker strategies, and time-ordered UUIDv7 generation. |
-| **Application** | `src/app/` | `AppService`: business logic dispatching RPC methods to the runtime engine and formatting generated response types. |
-| **Wiring** | `src/wiring.rs` | Binds method names (`ping`, `create_queue`, `post_event`, etc.) on `RpcServer` to `AppService` handlers. |
-| **Client** | `client-py/` | Python SDK (`airbus_client`) with `RpcClient`, listener server, and protocol serialization. |
 
----
+| Layer                  | Path                           | Responsibility                                                                                            |
+| ---------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| **Schema**             | `schema/`                      | Payload JSON Schema and OpenRPC method catalog.                                                           |
+| **I/O & Transport**    | `src/io/`                      | TCP accept loop, optional HTTP (`POST /rpc` + static UI), RPC adapter that turns bytes into method calls. |
+| **Protocol**           | `src/proto/`                   | JSON-RPC 2.0 envelopes and generated payload types.                                                       |
+| **Application**        | `src/app/`                     | Typed handlers: validate, call runtime, return generated results.                                         |
+| **Runtime**            | `src/runtime/`                 | Named queues, mode-aware dispatch, delivery/retries, listener dial-out (`on_event`).                      |
+| **Wiring / bootstrap** | `src/wiring.rs`, `src/main.rs` | Register methods, parse CLI, spawn listeners.                                                             |
+| **Clients**            | `client-*/`                    | SDKs that speak the same contract; not part of the daemon process.                                        |
 
-## Detailed Layer Breakdown
 
-### 1. I/O & Networking (`src/io/`)
+**Where a change belongs**
 
-- `server.rs`: Implements `serve_tcp`, which binds a `TcpListener` on the configured address and accepts client connections. Each connection is handed off to a processing loop that reads newline-delimited JSON-RPC requests, delegates execution to `RpcServer`, and writes newline-delimited responses.
-- `rpc_server.rs`: The transport adapter. It maintains a registry of registered method handlers. When given raw request bytes, it invokes `src/proto/rpc.rs` to parse the JSON-RPC document, dispatches to the registered handler, and serializes the result back to JSON-RPC wire bytes.
-- `http_server.rs`: An optional lightweight HTTP server built on `tiny_http`. It serves:
-  1. Static files from `--resources DIR` (e.g. `resources/ui/index.html`, `styles.css`, `app.js`, `protocol.js`).
-  2. A `POST /rpc` endpoint that accepts standard JSON-RPC 2.0 POST requests, processes them through the shared `RpcServer`, and returns the JSON-RPC response.
-- `net.rs`: Helpers for parsing socket addresses and TCP stream configuration.
-- `log.rs`: Thread-safe stderr logging formatting timestamps and log levels without external dependencies.
-
-### 2. Protocol & Wire Types (`src/proto/`)
-
-- `rpc.rs`: Implements standard JSON-RPC 2.0 framing. Defines `RpcRequest`, `RpcResponse`, `RpcError`, and error codes (`PARSE_ERROR`, `INVALID_REQUEST`, `METHOD_NOT_FOUND`, `INVALID_PARAMS`, `INTERNAL_ERROR`). It enforces that responses contain either `result` or `error`, never both.
-- `payloads.rs`: Typify-generated Rust structs corresponding to all schemas in `schema/payloads/`. Includes parameter and result types like `CreateQueueParams`, `PostEventParams`, `PeekEventsResult`, and `AttachListenerParams`.
-
-### 3. Application Service (`src/app/`)
-
-- `service.rs`: Defines `AppService`. It holds an `Arc<QueueManager>` and provides typed handler methods:
-  - `ping(&self) -> PingResult`
-  - `add(&self, params: AddParams) -> AddResult`
-  - `create_queue(&self, params: CreateQueueParams) -> Result<CreateQueueResult, InvalidParams>`
-  - `delete_queue(&self, params: DeleteQueueParams) -> DeleteQueueResult`
-  - `post_event(&self, params: PostEventParams) -> Result<PostEventResult, InvalidParams>`
-  - `peek_events(&self, params: PeekEventsParams) -> Result<PeekEventsResult, InvalidParams>`
-  - `list_queues(&self) -> ListQueuesResult`
-  - `attach_listener(&self, params: AttachListenerParams) -> Result<AttachListenerResult, InvalidParams>`
-  - `detach_listener(&self, params: DetachListenerParams) -> Result<DetachListenerResult, InvalidParams>`
-  - `list_listeners(&self, params: Option<ListListenersParams>) -> Result<ListListenersResult, InvalidParams>`
-
-Each method validates parameters, delegates state manipulation to `QueueManager`, and wraps results in generated schema types.
-
-### 4. Runtime Queuing Engine (`src/runtime/`)
-
-- `manager.rs`: `QueueManager` coordinates all named queues and listener registrations. Thread-safe and shared via `Arc<RwLock<...>>` / `Arc<Mutex<...>>`.
-- `queue.rs`: `Queue` maintains the in-memory ring/buffer of events, tracking depth, sequence numbers, and unconsumed event state.
-- `queue/delivery.rs`: Tracks inflight event deliveries, acknowledgment states, retry counters, and expiration deadlines.
-- `queue/dispatcher.rs`: Runs background event dispatch loops that route newly published events to available listeners according to queue configuration.
-- `queue/dispatch/`: Submodules implementing per-mode delivery:
-  - `broadcast.rs`: Fan-out — every attached listener receives each event.
-  - `worker.rs`: Fifo competing-consumer delivery (listener selection / exclusivity come from `dispatch_strategy` at create: `round_robin` or `single_node`).
-  - `duplex.rs`: Full-duplex cross-route to the opposite `host`/`device` side.
-- `queue/listener.rs`: Manages listener network state, TCP connection pooling, and callback RPC execution (`on_event`).
-- `uuidv7.rs`: Custom implementation of UUIDv7 (RFC 9562) providing 128-bit time-ordered identifiers with millisecond timestamp precision and cryptographic randomness.
-
-### 5. Composition Root (`src/wiring.rs` & `src/main.rs`)
-
-`src/wiring.rs` provides `bind_app_service`:
-
-```rust
-pub fn bind_app_service(rpc: &mut RpcServer, app: Arc<AppService>) {
-    rpc.register("ping", ...);
-    rpc.register("add", ...);
-    rpc.register("create_queue", ...);
-    rpc.register("delete_queue", ...);
-    rpc.register("post_event", ...);
-    rpc.register("peek_events", ...);
-    rpc.register("list_queues", ...);
-    rpc.register("attach_listener", ...);
-    rpc.register("detach_listener", ...);
-    rpc.register("list_listeners", ...);
-}
-```
-
-`main.rs` initializes logging, parses CLI flags (`--listen`, `--http`, `--resources`), instantiates `AppService`, binds it to `RpcServer`, and spawns the TCP listener and optional HTTP server threads.
-
----
+- New/changed RPC shapes → `schema/`, then codegen ([Protocol](protocol.md)).
+- Delivery semantics (modes, retries, exclusivity) → `src/runtime/` and [Queues & Dispatch](queues-and-dispatch.md).
+- Transport or framing → `src/io/` / `src/proto/` (envelopes stay out of `app/` and `runtime/`).
+- Method orchestration only → `src/app/` + wiring.
 
 ## Concurrency & Threading Model
 
@@ -126,7 +65,7 @@ pub fn bind_app_service(rpc: &mut RpcServer, app: Arc<AppService>) {
 │     (port 9097)     │                     │     (port 9098)     │
 └──────────┬──────────┘                     └──────────┬──────────┘
            │                                           │
-           ▼ (spawns per connection)                   ▼ (spawns per request)
+           ▼ (per connection)                          ▼ (per request)
 ┌─────────────────────┐                     ┌─────────────────────┐
 │  Client TCP Worker  │                     │  HTTP Request Worker│
 └──────────┬──────────┘                     └──────────┬──────────┘
@@ -134,30 +73,29 @@ pub fn bind_app_service(rpc: &mut RpcServer, app: Arc<AppService>) {
            └─────────────────────┬─────────────────────┘
                                  ▼
                      ┌───────────────────────┐
-                     │  Shared QueueManager  │
-                     │  (Arc<RwLock/Mutex>)  │
+                     │  Shared queue runtime │
                      └───────────┬───────────┘
                                  │
            ┌─────────────────────┴─────────────────────┐
            ▼                                           ▼
 ┌─────────────────────┐                     ┌─────────────────────┐
-│ Dispatcher Worker 1 │                     │ Dispatcher Worker N │
-│ (queue: "jobs")     │                     │ (queue: "events")   │
+│ Dispatcher workers  │                     │ Dispatcher workers  │
+│ (per active queue)  │                     │ (dial listeners)    │
 └─────────────────────┘                     └─────────────────────┘
 ```
 
-1. **Accept Loop**: The TCP listener loop accepts inbound client connections and handles them with asynchronous or per-connection workers.
-2. **Shared State**: All queue data structures and listener pools are protected by synchronizing primitives (`RwLock` for queue routing, `Mutex` for delivery rings).
-3. **Dispatch Loops**: When events are published to a queue, active dispatch workers match available listeners and initiate TCP callback connections (`on_event`) without blocking the publisher.
+1. **Accept / HTTP**: Inbound RPC is handled on connection- or request-scoped workers; they share the same application + runtime state.
+2. **Shared state**: Queue registry and listener pools are synchronized; publishers are not blocked on listener I/O.
+3. **Dispatch**: After `post_event` acks, background workers select listeners by queue mode and dial `on_event` (see [Queues & Dispatch](queues-and-dispatch.md)).
 
----
+## Debug UI
 
-## Static Debug UI Integration
+Optional HTTP serves static assets from `resources/ui/` and the same JSON-RPC surface at `POST /rpc`. The browser speaks native JSON-RPC — no REST translation layer.
 
-Airbus embeds a static web dashboard under `resources/ui/`:
-- `index.html`: Clean, zero-dependency HTML dashboard.
-- `styles.css`: Modern styling with dark/light theme support.
-- `protocol.js`: Client-side JSON-RPC 2.0 encoder/decoder. Formats valid envelopes and parses responses.
-- `app.js`: Connects to `POST /rpc`, periodically polls queue lists (`list_queues`) and listeners (`list_listeners`), provides forms to create queues, post events, and inspect events via `peek_events`.
+## Related
 
-Because the HTTP server exposes the exact same JSON-RPC methods at `POST /rpc`, the browser speaks native JSON-RPC without requiring an intermediate REST translation layer.
+- [Protocol](protocol.md) — envelopes, framing, schema/codegen boundaries
+- [Queues & Dispatch](queues-and-dispatch.md) — modes, delivery, retries, listeners
+- [CONTRIBUTING.md](../CONTRIBUTING.md) — develop and change this tree
+- Implementation: `src/`; method catalog: `schema/openrpc.json` + `schema/payloads/`
+

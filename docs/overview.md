@@ -1,16 +1,11 @@
 # Airbus Overview
 
-Airbus is a high-performance, lightweight event bus and message queue daemon implemented in
-Rust, communicating over JSON-RPC 2.0 with strict cross-language protocol schemas.
-
 ## Components
 
-- **Airbus daemon** (`src/`): Rust JSON-RPC TCP server providing event queues and dispatch.
-- **Airbus Python client** (`client-py/` → `airbus_client`): publishable SDK for other projects.
-- **Airbus Rust client** (`client-rs/` → `airbus-client`): async Tokio SDK on crates.io.
-- **Airbus embedded client** (`client-embedded/`): Arduino/ESP32 PlatformIO package (ArduinoJson typed payloads, poll-loop).
-- **Airbus Debug UI** (`resources/ui/`): Browser interface for queue inspection and RPC execution.
-- **Container image** (`Dockerfile`): runs the daemon + UI for deployment.
+- **Daemon** (`src/`): JSON-RPC TCP server (queues + dispatch).
+- **Python / Rust / embedded clients**: published SDKs (PyPI, crates.io, Release zip).
+- **Debug UI** (`resources/ui/`): inspect queues and run RPC in the browser.
+- **Container**: `[ghcr.io/ghhwer/airbus](https://github.com/ghhwer/airbus/pkgs/container/airbus)`.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -18,80 +13,57 @@ Rust, communicating over JSON-RPC 2.0 with strict cross-language protocol schema
 │                                                                 │
 │   airbus-client (pip / crates.io / ESP32)                       │
 │              ── JSON-RPC 2.0 (TCP :9097) ──▶ Airbus daemon      │
-│                              ▲                                  │
-│                              │ HTTP :9098  Debug UI / POST /rpc │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Key Capabilities
+## Capabilities
 
-1. **Named Event Queues**: Create and manage queues dynamically with configured delivery modes.
-2. **Three Queue Modes** (see [Queues & Dispatch](queues-and-dispatch.md)):
-   - `broadcast`: Every attached listener receives every event.
-   - `fifo`: Each event goes to one listener; optional `dispatch_strategy` (`round_robin` or exclusive `single_node`).
-   - `full-duplex`: Host ↔ device cross-route (`side` required; strategy not allowed).
-3. **Time-Ordered Event Identifiers**: Monotonically increasing, time-sortable UUIDv7 IDs.
-4. **Push-Based Listener Dispatch**: `on_event` RPC callbacks with acknowledgments.
-5. **Configurable Retries & Timeouts**: `max_retries`, `exhaustion_timeout_ms`.
-6. **Non-Destructive Peeking**: `peek_events` without advancing consumers.
-7. **Strict Contract Boundaries**: Schema-first JSON Schema + OpenRPC; generated Rust (daemon + client)/Python/embedded types.
-8. **Interactive Debug UI**: HTTP static server + JSON-RPC at `POST /rpc`.
+1. Named queues with three modes ([Queues & Dispatch](queues-and-dispatch.md)):
+  - `broadcast` — every listener gets every event
+  - `fifo` — one listener per event; optional `round_robin` / `single_node`
+  - `full-duplex` — host ↔ device cross-route (`side` required)
+2. UUIDv7 event IDs (time-ordered)
+3. Push `on_event` delivery with acks, retries, timeouts
+4. Non-destructive `peek_events`
+5. Schema-first OpenRPC / JSON Schema; generated client types
+6. HTTP debug UI + `POST /rpc`
 
-## Quick Start
+## Quick start (consume)
 
 ```bash
-make setup && make build && make run
-# TCP 0.0.0.0:9097 — HTTP http://127.0.0.1:9098/
+docker run --rm -p 9097:9097 -p 9098:9098 ghcr.io/ghhwer/airbus:latest
 ```
-
-Or with Docker:
-
-```bash
-docker compose up --build
-```
-
-```text
-airbus --listen [host:]port [--http [host:]port --resources DIR]
-```
-
-## Configuration & Environment Variables
-
-| Variable | Default | Purpose |
-| -------- | ------- | ------- |
-| `AIRBUS_URL` | `127.0.0.1:9097` | Client TCP `host:port` |
-| `AIRBUS_HOST` | `127.0.0.1` | Fallback host |
-| `AIRBUS_PORT` | `9097` | Fallback port |
-| `AIRBUS_BIN` | `out/airbus` | Binary path for tests / helpers |
-| `AIRBUS_HTTP_URL` | `0.0.0.0:9098` | Optional HTTP debug listener (local make run) |
-| `AIRBUS_RESOURCES` | `resources/ui` | HTTP static assets |
-
-## Python Client
 
 ```bash
 pip install airbus-client
 ```
 
 ```python
-from airbus_client import RpcClient
+from airbus_client import Queue, QueueMode
 
-client = RpcClient()
-assert client.ping() == "pong"
+q = Queue("jobs")
+q.create(QueueMode.fifo)
+q.attach(lambda e: print(e["event"]))
+q.post({"type": "hello"})
 ```
 
-## Embedded C++ Client (ESP32)
+Build/run from this repo: [CONTRIBUTING.md](../CONTRIBUTING.md).
 
-Release asset on `v*` tags: `airbus-client-arduino-esp32-vX.Y.Z.zip` (`client-embedded/`).
+## Environment
 
-```cpp
-#include <airbus/embedded_rpc.h>
 
-airbus::EmbeddedRpcClient rpc;
-String err;
-assert(rpc.ping(err));
-```
+| Variable                      | Default              | Purpose                          |
+| ----------------------------- | -------------------- | -------------------------------- |
+| `AIRBUS_URL`                  | `127.0.0.1:9097`     | Client TCP `host:port`           |
+| `AIRBUS_HOST` / `AIRBUS_PORT` | `127.0.0.1` / `9097` | Fallbacks                        |
+| `AIRBUS_BIN`                  | `out/airbus`         | Binary for tests / helpers (dev) |
 
-## Detailed Documentation
 
-- [Architecture & Layering](architecture.md)
-- [Protocol & Contracts](protocol.md)
+## More docs
+
+- [Client usage](clients/README.md) — [Python](clients/python.md) · [Rust](clients/rust.md) · [Embedded](clients/embedded.md)
 - [Queues & Dispatch](queues-and-dispatch.md)
+- [Protocol](protocol.md) · [Architecture](architecture.md)
+- [AI agents (adopters)](agents/README.md)
+- [CONTRIBUTING.md](../CONTRIBUTING.md) — develop and change this tree
+
