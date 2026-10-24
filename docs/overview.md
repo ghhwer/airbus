@@ -7,6 +7,7 @@ Rust, communicating over JSON-RPC 2.0 with strict cross-language protocol schema
 
 - **Airbus daemon** (`src/`): Rust JSON-RPC TCP server providing event queues and dispatch.
 - **Airbus Python client** (`client-py/` → `airbus_client`): publishable SDK for other projects.
+- **Airbus Rust client** (`client-rs/` → `airbus-client`): async Tokio SDK on crates.io.
 - **Airbus embedded client** (`client-embedded/`): Arduino/ESP32 PlatformIO package (ArduinoJson typed payloads, poll-loop).
 - **Airbus Debug UI** (`resources/ui/`): Browser interface for queue inspection and RPC execution.
 - **Container image** (`Dockerfile`): runs the daemon + UI for deployment.
@@ -15,8 +16,8 @@ Rust, communicating over JSON-RPC 2.0 with strict cross-language protocol schema
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Your application                        │
 │                                                                 │
-│   airbus-client (pip / ESP32) ── JSON-RPC 2.0 (TCP :9097) ──▶ Airbus   │
-│                                                         daemon  │
+│   airbus-client (pip / crates.io / ESP32)                       │
+│              ── JSON-RPC 2.0 (TCP :9097) ──▶ Airbus daemon      │
 │                              ▲                                  │
 │                              │ HTTP :9098  Debug UI / POST /rpc │
 └─────────────────────────────────────────────────────────────────┘
@@ -33,7 +34,7 @@ Rust, communicating over JSON-RPC 2.0 with strict cross-language protocol schema
 4. **Push-Based Listener Dispatch**: `on_event` RPC callbacks with acknowledgments.
 5. **Configurable Retries & Timeouts**: `max_retries`, `exhaustion_timeout_ms`.
 6. **Non-Destructive Peeking**: `peek_events` without advancing consumers.
-7. **Strict Contract Boundaries**: Schema-first JSON Schema + OpenRPC; generated Rust/Python/embedded types.
+7. **Strict Contract Boundaries**: Schema-first JSON Schema + OpenRPC; generated Rust (daemon + client)/Python/embedded types.
 8. **Interactive Debug UI**: HTTP static server + JSON-RPC at `POST /rpc`.
 
 ## Quick Start

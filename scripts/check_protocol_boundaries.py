@@ -100,12 +100,15 @@ def violations(path: Path, source: str) -> list[str]:
 def check(root: Path = ROOT) -> list[str]:
     paths = [
         *root.joinpath("src").rglob("*.rs"),
+        *root.joinpath("client-rs/src").rglob("*.rs"),
         *root.joinpath("client-py/src").rglob("*.py"),
         *root.joinpath("resources/ui").rglob("*.js"),
     ]
     allowed = {
         "client-py/src/airbus_client/protocol.py",
         "client-py/src/airbus_client/payloads.py",
+        "client-rs/src/protocol.rs",
+        "client-rs/src/payloads.rs",
         "resources/ui/protocol.js",
     }
     issues = []

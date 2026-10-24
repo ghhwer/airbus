@@ -7,7 +7,8 @@ HTTP_URL ?= 0.0.0.0:9098
 RESOURCES ?= $(CURDIR)/resources/ui
 
 .PHONY: all clean run setup client test test-unit test-integration \
-	generate build check-protocol docker docker-run publish-client pack-client-embedded help
+	generate build check-protocol docker docker-run publish-client publish-client-rs \
+	pack-client-embedded help
 
 all: build
 
@@ -16,11 +17,12 @@ help:
 	@echo "  make build                 cargo build --release → out/airbus"
 	@echo "  make run                   TCP + HTTP debug UI"
 	@echo "  make setup                 uv sync (workspace + client-py)"
-	@echo "  make test                  protocol checks + unit + py integration"
+	@echo "  make test                  protocol checks + unit + py/rs integration"
 	@echo "  make generate              regenerate Rust/Python/embedded payloads from schema"
 	@echo "  make docker                build container image airbus:local"
 	@echo "  make docker-run            run container (9097 TCP, 9098 HTTP)"
 	@echo "  make publish-client        build+publish airbus-client wheel (needs UV_PUBLISH_*)"
+	@echo "  make publish-client-rs     cargo publish -p airbus-client (crates.io)"
 	@echo "  make pack-client-embedded  zip Arduino/ESP32 PIO release asset → dist/"
 
 build:
@@ -51,11 +53,14 @@ check-protocol:
 	uv run python scripts/generate_payloads.py --check
 
 test-unit:
-	cargo test
+	cargo test -p airbus --lib
+	cargo test -p airbus --bins
+	cargo test -p airbus --tests
 	node tests/protocol.test.mjs
 
 test-integration: build setup
 	cd $(CLIENT_DIR) && AIRBUS_BIN="$(CURDIR)/$(TARGET)" uv run pytest
+	AIRBUS_BIN="$(CURDIR)/$(TARGET)" cargo test -p airbus-client
 
 test: check-protocol test-unit test-integration
 
@@ -69,6 +74,10 @@ publish-client: setup
 	@out=$$(mktemp -d); \
 	uv build --package airbus-client --out-dir "$$out"; \
 	uv publish --trusted-publishing always "$$out"/*
+
+publish-client-rs:
+	cargo publish -p airbus-client --dry-run
+	cargo publish -p airbus-client
 
 pack-client-embedded:
 	python3 scripts/pack_embedded_client.py --out-dir dist

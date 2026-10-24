@@ -1,8 +1,13 @@
+[workspace]
+members = ["client-rs"]
+resolver = "2"
+
 [package]
 name = "airbus"
 version = "0.1.1"
 edition = "2021"
 description = "JSON-RPC over TCP (optional HTTP UI) with in-process event queues"
+publish = false
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
