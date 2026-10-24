@@ -6,6 +6,29 @@ on:
   pull_request:
 
 jobs:
+  # Require this check on main (Settings → Branches → Require status checks → uv-lock-check).
+  # Ensures the lock is in sync and only references public PyPI hosts (not Verigate).
+  # To fix a Verigate-authored lock without upgrading packages:
+  #   python scripts/rewrite_uv_lock_to_public.py
+  uv-lock-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+      - name: Check uv.lock is up to date
+        env:
+          UV_INDEX_URL: ""
+          UV_EXTRA_INDEX_URL: ""
+          UV_DEFAULT_INDEX: ""
+        run: |
+          set -euo pipefail
+          unset UV_INDEX_URL UV_EXTRA_INDEX_URL UV_DEFAULT_INDEX || true
+          uv lock --check
+      - name: Assert public PyPI registries only
+        run: python scripts/rewrite_uv_lock_to_public.py --check
+
   rust:
     runs-on: ubuntu-latest
     steps:
