@@ -8,8 +8,6 @@ This is not the adopter brief.
 | Patch / extend this git tree | **This file** → [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 | Help someone *run or integrate* Airbus elsewhere | [`docs/agents/`](docs/agents/README.md) |
 
-Claude Code and similar tools: see [`CLAUDE.md`](CLAUDE.md) (points here).
-
 ---
 
 ## Docs boundary (do not mix these)
