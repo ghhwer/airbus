@@ -11,7 +11,9 @@ RUN apt-get update \
 	&& cargo install --locked cargo-auditable
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
-RUN cargo auditable build --release --target x86_64-unknown-linux-musl
+# Workspace member required for Cargo resolution; not compiled into the image.
+COPY client-rs ./client-rs
+RUN cargo auditable build --release --target x86_64-unknown-linux-musl -p airbus
 
 FROM scratch
 COPY --from=builder /src/target/x86_64-unknown-linux-musl/release/airbus /airbus
