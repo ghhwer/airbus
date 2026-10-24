@@ -6,6 +6,43 @@ on:
   pull_request:
 
 jobs:
+  # Require this check on main (Settings → Branches → Require status checks → uv-lock-check).
+  # Ensures the lock is in sync and only references public PyPI hosts (not Verigate).
+  uv-lock-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+      - name: Check uv.lock is up to date
+        env:
+          UV_INDEX_URL: ""
+          UV_EXTRA_INDEX_URL: ""
+          UV_DEFAULT_INDEX: ""
+        run: |
+          set -euo pipefail
+          unset UV_INDEX_URL UV_EXTRA_INDEX_URL UV_DEFAULT_INDEX || true
+          uv lock --check
+      - name: Assert public PyPI registries only
+        run: |
+          set -euo pipefail
+          # Fail on any registry/URL host in uv.lock that is not public PyPI.
+          bad="$(
+            grep -Eho 'https?://[^/"'"'"' ]+' uv.lock \
+              | sed -E 's#https?://##' \
+              | cut -d/ -f1 \
+              | sort -u \
+              | grep -Ev '^(pypi\.org|files\.pythonhosted\.org)$' \
+              || true
+          )"
+          if [ -n "${bad}" ]; then
+            echo "::error::uv.lock references non-public hosts:"
+            echo "${bad}"
+            exit 1
+          fi
+          echo "All uv.lock hosts are public PyPI"
+
   rust:
     runs-on: ubuntu-latest
     steps:

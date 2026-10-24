@@ -1,0 +1,78 @@
+# Regenerates uv.lock against public PyPI on feat/** pushes and commits it back.
+#
+# Required secret: UV_LOCK_BOT_TOKEN
+#   Fine-grained PAT (or GitHub App installation token) with Contents: Read and write
+#   on this repo. Do NOT use GITHUB_TOKEN for the push — GitHub will not re-trigger
+#   workflows on that push, so required PR checks would never run on the new SHA.
+#
+# After merging this workflow: Settings → Secrets → Actions → New repository secret
+#   Name: UV_LOCK_BOT_TOKEN
+#   Value: <PAT with contents:write>
+#
+# Also set branch protection on main to require the `uv-lock-check` job from ci.yml
+# (Settings → Branches → rule for `main` → Require status checks → uv-lock-check).
+
+name: refresh-uv-lock
+
+on:
+  push:
+    branches: ["feat/**"]
+
+concurrency:
+  group: refresh-uv-lock-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require UV_LOCK_BOT_TOKEN
+        env:
+          UV_LOCK_BOT_TOKEN: ${{ secrets.UV_LOCK_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${UV_LOCK_BOT_TOKEN}" ]; then
+            echo "::error::UV_LOCK_BOT_TOKEN secret is not set. Add a fine-grained PAT (Contents: Read and write) as repo secret UV_LOCK_BOT_TOKEN."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          token: ${{ secrets.UV_LOCK_BOT_TOKEN }}
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+
+      - name: Regenerate uv.lock against public PyPI
+        env:
+          # Clear any Verigate / private index overrides so the lock uses pypi.org.
+          UV_INDEX_URL: ""
+          UV_EXTRA_INDEX_URL: ""
+          UV_DEFAULT_INDEX: ""
+        run: |
+          set -euo pipefail
+          unset UV_INDEX_URL UV_EXTRA_INDEX_URL UV_DEFAULT_INDEX || true
+          uv lock
+
+      - name: Commit and push if uv.lock changed
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          if git diff --quiet -- uv.lock; then
+            echo "uv.lock already up to date"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add uv.lock
+          git commit -m "chore: refresh uv.lock for public PyPI"
+          git push origin "HEAD:${BRANCH}"
