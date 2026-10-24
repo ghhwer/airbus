@@ -1,0 +1,43 @@
+name: publish-client-rs
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  osv:
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.6.0
+    with:
+      fail-on-vuln: true
+      scan-args: |-
+        -r
+        ./
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+  crates:
+    needs: [osv]
+    runs-on: ubuntu-latest
+    environment: crates-io
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Authenticate to crates.io (Trusted Publishing)
+        uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+      - name: Publish airbus-client to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: |
+          set -euo pipefail
+          cargo publish -p airbus-client --dry-run
+          # Requires crates.io Trusted Publishing for ghhwer/airbus → publish-client-rs.yml
+          # (environment: crates-io). First publish may need a one-time manual cargo publish;
+          # pending publishers: https://crates.io/docs/trusted-publishing
+          cargo publish -p airbus-client

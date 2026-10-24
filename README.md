@@ -1,7 +1,7 @@
 # Airbus
 
-JSON-RPC event bus: a Rust daemon plus two language clients — Python on PyPI and
-Arduino/ESP32 C++ via a GitHub Release zip.
+JSON-RPC event bus: a Rust daemon plus language clients — Python on PyPI, async Rust on
+crates.io, and Arduino/ESP32 C++ via a GitHub Release zip.
 
 This repository is the **canonical home** for Airbus (daemon, schema, clients, debug UI,
 and container image). Other projects consume the published client and/or run the
@@ -15,6 +15,7 @@ container — they do not need to vendor this tree.
 ├── src/                 # Rust daemon (app / io / proto / runtime)
 ├── tests/               # Rust unit + JS protocol tests
 ├── client-py/           # Python airbus-client (PyPI)
+├── client-rs/           # Async Rust airbus-client (crates.io)
 ├── client-embedded/     # Arduino/ESP32 client (PlatformIO zip)
 ├── docs/                # architecture, protocol, queues
 ├── Dockerfile           # daemon + UI image
@@ -57,6 +58,34 @@ Publish (maintainers), after tagging `v*`:
 # or locally:
 make publish-client   # requires UV_PUBLISH_TOKEN (or equivalent)
 ```
+
+## Rust client (crates.io)
+
+```bash
+cargo add airbus-client
+```
+
+```rust
+use airbus_client::RpcClient;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = RpcClient::from_env()?;
+    assert_eq!(client.ping().await?.as_str(), "pong");
+    Ok(())
+}
+```
+
+Publish (maintainers), after tagging `v*`:
+
+```bash
+# Trusted Publishing from CI (see .github/workflows/publish-client-rs.yml)
+# One-time: create a crates.io pending publisher for ghhwer/airbus → publish-client-rs.yml
+# or locally:
+make publish-client-rs
+```
+
+See [`client-rs/README.md`](client-rs/README.md).
 
 ## Embedded C++ client (GitHub Release)
 
@@ -109,7 +138,7 @@ Published images (on version tags) go to `ghcr.io/ghhwer/airbus`.
 ## Schema / codegen
 
 ```bash
-make generate   # typify → src/proto/payloads.rs
+make generate   # typify → src/proto/payloads.rs + client-rs/src/payloads.rs
                 # datamodel-codegen → client-py/.../payloads.py
                 # scripts → client-embedded/.../payloads.h
 ```

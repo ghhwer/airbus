@@ -1,0 +1,23 @@
+[package]
+name = "airbus-client"
+version = "0.1.1"
+edition = "2021"
+description = "Async Rust client for the Airbus JSON-RPC event bus"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/ghhwer/airbus"
+homepage = "https://github.com/ghhwer/airbus"
+documentation = "https://docs.rs/airbus-client"
+keywords = ["json-rpc", "airbus", "event-bus", "tokio"]
+categories = ["network-programming", "asynchronous"]
+exclude = ["tests/"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["net", "io-util", "sync", "macros", "rt", "time", "process"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4"] }

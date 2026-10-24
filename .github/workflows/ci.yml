@@ -16,8 +16,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install cargo-audit
         run: cargo install --locked cargo-audit
-      - run: cargo clippy -- -D warnings
-      - run: cargo test
+      - run: cargo clippy --workspace -- -D warnings
+      - run: cargo test -p airbus
       - run: cargo audit
       - run: node tests/protocol.test.mjs
 
@@ -43,6 +43,8 @@ jobs:
       - run: uv run python scripts/check_protocol_boundaries.py
       - run: uv run python scripts/generate_payloads.py --check
       - run: cd client-py && AIRBUS_BIN="$GITHUB_WORKSPACE/out/airbus" uv run pytest
+      - name: Rust client integration tests
+        run: AIRBUS_BIN="$GITHUB_WORKSPACE/out/airbus" cargo test -p airbus-client
 
   image:
     runs-on: ubuntu-latest
