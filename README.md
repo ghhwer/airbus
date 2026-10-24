@@ -63,12 +63,12 @@ Check `https://github.com/ghhwer/airbus` and read "docs/agents/README.md" to und
 I want to chat about this and discuss how this fits into my stack.
 ```
 
-If you are an agent just go to: `[docs/agents/](docs/agents/README.md)`.
+If you are an agent just go to: [docs/agents/](docs/agents/README.md).
 
 ### (Option B) Run it yourself (Docker + Python)
 
 **1. Start the daemon using docker**
-`[ghcr.io/ghhwer/airbus](https://github.com/ghhwer/airbus/pkgs/container/airbus)`):
+[ghcr.io/ghhwer/airbus](https://github.com/ghhwer/airbus/pkgs/container/airbus)):
 
 ```bash
 docker run --rm -p 9097:9097 -p 9098:9098 ghcr.io/ghhwer/airbus:latest
