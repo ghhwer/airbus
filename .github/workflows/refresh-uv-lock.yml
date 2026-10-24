@@ -58,7 +58,27 @@ jobs:
         run: |
           set -euo pipefail
           unset UV_INDEX_URL UV_EXTRA_INDEX_URL UV_DEFAULT_INDEX || true
+          # Plain `uv lock` keeps existing registry URLs from a Verigate-authored
+          # lockfile. Delete first so resolution is forced against public PyPI.
+          rm -f uv.lock
           uv lock
+
+      - name: Assert public PyPI registries only
+        run: |
+          set -euo pipefail
+          bad="$(
+            grep -Eho 'https?://[^/"'"'"' ]+' uv.lock \
+              | sed -E 's#https?://##' \
+              | cut -d/ -f1 \
+              | sort -u \
+              | grep -Ev '^(pypi\.org|files\.pythonhosted\.org)$' \
+              || true
+          )"
+          if [ -n "${bad}" ]; then
+            echo "::error::Regenerated uv.lock still references non-public hosts:"
+            echo "${bad}"
+            exit 1
+          fi
 
       - name: Commit and push if uv.lock changed
         env:
