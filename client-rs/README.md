@@ -20,4 +20,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 Endpoint defaults: `AIRBUS_URL` or `AIRBUS_HOST` / `AIRBUS_PORT` (else `127.0.0.1:9097`).
 
 The daemon is distributed separately (container image or `cargo`/`make build`).
-See the [repository README](https://github.com/ghhwer/airbus) for run instructions.
+See the [repository README](https://github.com/ghhwer/airbus) for run instructions and
+[docs/clients/rust.md](../docs/clients/rust.md) for usage (Queue, listen, batch).

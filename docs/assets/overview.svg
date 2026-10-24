@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 360" role="img" aria-labelledby="title desc">
+  <title id="title">Airbus overview</title>
+  <desc id="desc">Multiple devices share Airbus over JSON-RPC TCP on port 9097. A browser hits the HTTP debug UI on port 9098.</desc>
+  <defs>
+    <style>
+      .canvas { fill: #f6f7f9; }
+      .panel {
+        fill: #ffffff;
+        stroke: #d7dbe3;
+        stroke-width: 1.25;
+      }
+      .hub {
+        fill: #111827;
+        stroke: #111827;
+      }
+      .label { font: 600 13px ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; fill: #111827; }
+      .sub { font: 400 11px ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; fill: #5b6475; }
+      .hub-label { font: 700 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; fill: #ffffff; }
+      .hub-sub { font: 400 12px ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; fill: #c7cdd8; }
+      .wire { fill: none; stroke: #94a3b8; stroke-width: 1.75; }
+      .bus { fill: none; stroke: #94a3b8; stroke-width: 2; }
+      .arrow { fill: #94a3b8; }
+      .chip {
+        fill: #eef2f7;
+        stroke: #d0d7e2;
+        stroke-width: 1;
+      }
+      .chip-text { font: 600 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #334155; }
+      .port { fill: #0f766e; }
+      .port-text { font: 700 10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #ecfdf5; }
+      .dot { fill: #0f766e; }
+
+      @media (prefers-color-scheme: dark) {
+        .canvas { fill: #0b1220; }
+        .panel {
+          fill: #151c2c;
+          stroke: #2a3548;
+        }
+        .hub {
+          fill: #e8eef9;
+          stroke: #e8eef9;
+        }
+        .label { fill: #e8eef9; }
+        .sub { fill: #9aa6b8; }
+        .hub-label { fill: #0b1220; }
+        .hub-sub { fill: #4b5568; }
+        .wire { stroke: #64748b; }
+        .bus { stroke: #64748b; }
+        .arrow { fill: #64748b; }
+        .chip {
+          fill: #1b2436;
+          stroke: #334155;
+        }
+        .chip-text { fill: #cbd5e1; }
+        .port { fill: #14b8a6; }
+        .port-text { fill: #042f2e; }
+        .dot { fill: #14b8a6; }
+      }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrow" d="M 0 0 L 10 5 L 0 10 z"/>
+    </marker>
+  </defs>
+
+  <rect class="canvas" width="760" height="360" rx="16"/>
+
+  <!-- Devices -->
+  <g transform="translate(32, 28)">
+    <rect class="panel" width="200" height="64" rx="12"/>
+    <text class="label" x="18" y="28">Python worker</text>
+    <text class="sub" x="18" y="46">airbus-client</text>
+  </g>
+
+  <g transform="translate(32, 108)">
+    <rect class="panel" width="200" height="64" rx="12"/>
+    <text class="label" x="18" y="28">Rust service</text>
+    <text class="sub" x="18" y="46">async RpcClient</text>
+  </g>
+
+  <g transform="translate(32, 188)">
+    <rect class="panel" width="200" height="64" rx="12"/>
+    <text class="label" x="18" y="28">ESP32 board</text>
+    <text class="sub" x="18" y="46">embedded client</text>
+  </g>
+
+  <g transform="translate(32, 268)">
+    <rect class="panel" width="200" height="64" rx="12"/>
+    <text class="label" x="18" y="28">Browser</text>
+    <text class="sub" x="18" y="46">debug UI</text>
+  </g>
+
+  <!-- Shared bus spine -->
+  <path class="bus" d="M260 60 V220"/>
+  <circle class="dot" cx="260" cy="60" r="3.5"/>
+  <circle class="dot" cx="260" cy="140" r="3.5"/>
+  <circle class="dot" cx="260" cy="220" r="3.5"/>
+
+  <!-- Device stubs into bus -->
+  <path class="wire" d="M232 60 H260"/>
+  <path class="wire" d="M232 140 H260"/>
+  <path class="wire" d="M232 220 H260"/>
+
+  <!-- Bus into hub -->
+  <path class="wire" d="M260 140 H420" marker-end="url(#arrow)"/>
+  <g transform="translate(286, 112)">
+    <rect class="chip" width="116" height="24" rx="8"/>
+    <text class="chip-text" x="10" y="16">JSON-RPC TCP</text>
+  </g>
+
+  <!-- Browser separate HTTP path -->
+  <path class="wire" d="M232 300 H340 V200 H420" marker-end="url(#arrow)"/>
+  <g transform="translate(286, 248)">
+    <rect class="chip" width="92" height="24" rx="8"/>
+    <text class="chip-text" x="14" y="16">HTTP /rpc</text>
+  </g>
+
+  <!-- Hub -->
+  <g transform="translate(440, 88)">
+    <rect class="hub" width="280" height="184" rx="18"/>
+    <text class="hub-label" x="28" y="44">Airbus</text>
+    <text class="hub-sub" x="28" y="68">shared event bus</text>
+
+    <g transform="translate(28, 100)">
+      <rect class="port" width="54" height="22" rx="6"/>
+      <text class="port-text" x="10" y="15">:9097</text>
+      <text class="hub-sub" x="66" y="15">RPC for devices</text>
+    </g>
+    <g transform="translate(28, 136)">
+      <rect class="port" width="54" height="22" rx="6"/>
+      <text class="port-text" x="10" y="15">:9098</text>
+      <text class="hub-sub" x="66" y="15">debug UI</text>
+    </g>
+  </g>
+</svg>
