@@ -8,6 +8,11 @@ pip install airbus-client
 
 Endpoint defaults: `AIRBUS_URL`, or `AIRBUS_HOST` / `AIRBUS_PORT`, else `127.0.0.1:9097`.
 
+Push listeners register a callback host the daemon dials for `on_event`. By default the
+SDK auto-discovers the local egress IP toward the Airbus peer (or keeps `127.0.0.1`
+when the peer is loopback). Override with `AIRBUS_LISTEN_HOST` or `listen_host=` /
+`host=` — required when auto-detection cannot see a routable path to a **remote** bus.
+
 ## Quick start
 
 ```python
@@ -42,6 +47,16 @@ assert q.is_ready()
 q.close()  # detach + stop local listener
 # or: with Queue("pipeline_jobs") as q: ...
 ```
+
+Against a remote Airbus, auto-discovery usually registers a LAN/routable IP. Pin it when
+needed:
+
+```python
+q = Queue("pipeline_jobs", listen_host="10.0.0.42")
+# or: export AIRBUS_LISTEN_HOST=10.0.0.42
+```
+
+Local `127.0.0.1:9097` setups keep working without changes.
 
 ### Full-duplex (host ↔ device)
 
@@ -98,6 +113,8 @@ with client.listen("jobs", on_event=print) as listener:
 ```
 
 The context manager binds an ephemeral port, calls `attach_listener`, and detaches on exit.
+`host=` defaults to the same auto-discovery as `Queue` (`None` / omit); pass an explicit
+host or set `AIRBUS_LISTEN_HOST` for remote buses.
 
 ### Batches
 

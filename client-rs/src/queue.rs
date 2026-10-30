@@ -1,4 +1,8 @@
 //! Thin named-queue handle — create / delete / attach / post / readiness over Airbus RPC.
+//!
+//! Listen host defaults to auto-discovery toward the Airbus peer (see
+//! [`crate::endpoint::resolve_listen_host`]); pass [`Queue::with_listen_host`] or set
+//! `AIRBUS_LISTEN_HOST` to override.
 
 use crate::payloads::{
     CreateQueueParams, DeleteQueueParams, DispatchStrategy, DuplexSide, EventObject,
@@ -14,7 +18,7 @@ pub struct Queue {
     client: RpcClient,
     pub name: String,
     pub side: Option<DuplexSide>,
-    listen_host: String,
+    listen_host: Option<String>,
     listener: Option<EventListener>,
 }
 
@@ -28,7 +32,7 @@ impl Queue {
             client,
             name: name.into(),
             side: None,
-            listen_host: "127.0.0.1".into(),
+            listen_host: None,
             listener: None,
         })
     }
@@ -38,8 +42,9 @@ impl Queue {
         self
     }
 
+    /// Pin the callback host registered with Airbus (skips auto-discovery).
     pub fn with_listen_host(mut self, host: impl Into<String>) -> Self {
-        self.listen_host = host.into();
+        self.listen_host = Some(host.into());
         self
     }
 
@@ -90,7 +95,10 @@ impl Queue {
         if self.listener.is_some() {
             self.close().await;
         }
-        let mut listener = self.client.listen(self.name.clone()).host(self.listen_host.clone());
+        let mut listener = self.client.listen(self.name.clone());
+        if let Some(host) = self.listen_host.clone() {
+            listener = listener.host(host);
+        }
         if let Some(side) = self.side {
             listener = listener.side(side);
         }

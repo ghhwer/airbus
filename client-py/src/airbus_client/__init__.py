@@ -6,7 +6,9 @@ types live under ``airbus_client.payloads`` for raw RPC. ``protocol``,
 
 Endpoint defaults: ``AIRBUS_URL`` or ``AIRBUS_HOST``/``AIRBUS_PORT`` (else
 ``127.0.0.1:9097``). ``RpcClient()`` and ``Queue(name)`` use that resolution;
-pass ``client=`` for ephemeral test servers.
+pass ``client=`` for ephemeral test servers. Push-listener callback host
+auto-discovers toward the peer unless ``AIRBUS_LISTEN_HOST`` / ``listen_host=``
+is set.
 """
 
 from airbus_client.binary import run_airbus

@@ -269,7 +269,7 @@ impl Batch {
 pub struct EventListener {
     client: RpcClient,
     queue: String,
-    host: String,
+    host: Option<String>,
     exhaustion_timeout_ms: Option<u64>,
     max_retries: Option<u64>,
     max_events: Option<usize>,
@@ -288,7 +288,7 @@ impl EventListener {
         Self {
             client,
             queue,
-            host: "127.0.0.1".into(),
+            host: None,
             exhaustion_timeout_ms: None,
             max_retries: None,
             max_events: None,
@@ -303,8 +303,9 @@ impl EventListener {
         }
     }
 
+    /// Pin the callback host registered with Airbus (skips auto-discovery).
     pub fn host(mut self, host: impl Into<String>) -> Self {
-        self.host = host.into();
+        self.host = Some(host.into());
         self
     }
 
@@ -341,12 +342,23 @@ impl EventListener {
     }
 
     /// Bind, attach, and start accepting `on_event` deliveries.
+    ///
+    /// When [`Self::host`] was not set, resolves a routable listen host toward the
+    /// client's Airbus peer (see [`crate::endpoint::resolve_listen_host`]).
     pub async fn start<F, Fut>(mut self, on_event: F) -> Result<Self, ClientError>
     where
         F: Fn(Value) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<(), String>> + Send + 'static,
     {
-        let listener = TcpListener::bind((self.host.as_str(), 0)).await?;
+        let host = crate::endpoint::resolve_listen_host(
+            &self.client.host,
+            self.client.port,
+            self.host.as_deref(),
+        )
+        .map_err(ClientError::Other)?;
+        self.host = Some(host.clone());
+
+        let listener = TcpListener::bind((host.as_str(), 0)).await?;
         self.port = listener.local_addr()?.port();
         self.listener = Some(listener);
         self.on_event = Some(Arc::new(move |event| Box::pin(on_event(event))));
@@ -363,7 +375,7 @@ impl EventListener {
             .attach_listener(&AttachListenerParams {
                 queue,
                 port,
-                host: Some(self.host.clone()),
+                host: Some(host),
                 exhaustion_timeout_ms: self.exhaustion_timeout_ms,
                 max_retries: self.max_retries,
                 side: self.side,

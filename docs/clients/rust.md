@@ -8,6 +8,12 @@ cargo add airbus-client
 
 Endpoint defaults: `AIRBUS_URL`, or `AIRBUS_HOST` / `AIRBUS_PORT`, else `127.0.0.1:9097`.
 
+Push listeners register a callback host the daemon dials for `on_event`. By default the
+SDK auto-discovers the local egress IP toward the Airbus peer (or keeps `127.0.0.1`
+when the peer is loopback). Override with `AIRBUS_LISTEN_HOST` or
+`Queue::with_listen_host` / `EventListener::host` — required when auto-detection cannot
+see a routable path to a **remote** bus.
+
 ## Quick start
 
 ```rust
@@ -61,7 +67,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+Against a remote Airbus, auto-discovery usually registers a LAN/routable IP. Pin it when
+needed:
 
+```rust
+let mut q = Queue::new("pipeline_jobs", None)?.with_listen_host("10.0.0.42");
+// or: export AIRBUS_LISTEN_HOST=10.0.0.42
+```
+
+Local `127.0.0.1:9097` setups keep working without changes.
 
 ### Full-duplex (host ↔ device)
 
@@ -135,7 +149,7 @@ Also available: `delete_queue`, `attach_listener`, `detach_listener`, `list_list
 ```rust
 let mut listener = rpc
     .listen("jobs")
-    .host("127.0.0.1")
+    // .host("10.0.0.42")  // optional; default auto-discovers toward the peer
     .max_events(100)
     .start(|event| async move {
         println!("{event}");
@@ -146,7 +160,7 @@ let mut listener = rpc
 listener.close().await;
 ```
 
-Builder options: `exhaustion_timeout_ms`, `max_retries`, `side`.
+Builder options: `host` (auto when omitted), `exhaustion_timeout_ms`, `max_retries`, `side`.
 
 ### Batches
 
