@@ -8,6 +8,11 @@ cargo add airbus-client
 
 Endpoint defaults: `AIRBUS_URL`, or `AIRBUS_HOST` / `AIRBUS_PORT`, else `127.0.0.1:9097`.
 
+Push listeners register a callback host the daemon dials for `on_event`. The SDK
+auto-discovers that address; against a **remote** bus, override with
+`AIRBUS_LISTEN_HOST` or `Queue::with_listen_host` / `EventListener::host` if the
+detected IP is not reachable from the daemon.
+
 ## Quick start
 
 ```rust
@@ -61,7 +66,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-
+```rust
+let mut q = Queue::new("pipeline_jobs", None)?.with_listen_host("10.0.0.42"); // pin if needed
+```
 
 ### Full-duplex (host ↔ device)
 
@@ -135,7 +142,6 @@ Also available: `delete_queue`, `attach_listener`, `detach_listener`, `list_list
 ```rust
 let mut listener = rpc
     .listen("jobs")
-    .host("127.0.0.1")
     .max_events(100)
     .start(|event| async move {
         println!("{event}");
@@ -146,7 +152,7 @@ let mut listener = rpc
 listener.close().await;
 ```
 
-Builder options: `exhaustion_timeout_ms`, `max_retries`, `side`.
+Builder options: `host`, `exhaustion_timeout_ms`, `max_retries`, `side`.
 
 ### Batches
 

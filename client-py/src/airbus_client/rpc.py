@@ -152,21 +152,23 @@ class EventListener:
         queue: str,
         on_event: Callable[[dict[str, Any]], Any],
         *,
-        host: str = "127.0.0.1",
+        host: str | None = None,
         exhaustion_timeout_ms: int | None = None,
         max_retries: int | None = None,
         max_events: int | None = None,
         side: DuplexSide | None = None,
     ) -> None:
+        from airbus_client.endpoint import resolve_listen_host
+
         self._client = client
         self._queue = queue
         self._on_event = on_event
-        self._host = host
+        self._host = resolve_listen_host(client.host, client.port, override=host)
         self._exhaustion_timeout_ms = exhaustion_timeout_ms
         self._max_retries = max_retries
         self._max_events = max_events
         self._side = side
-    
+
         self._server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._server_sock.bind((self._host, 0))
@@ -417,12 +419,13 @@ class RpcClient:
         queue: str,
         on_event: Callable[[dict[str, Any]], Any] | None = None,
         *,
-        host: str = "127.0.0.1",
+        host: str | None = None,
         exhaustion_timeout_ms: int | None = None,
         max_retries: int | None = None,
         side: DuplexSide | None = None,
         max_events: int | None = None,
     ) -> EventListener:
+        """Bind a push listener. ``host`` defaults to auto-discovery (see endpoint)."""
         cb = on_event if on_event is not None else (lambda e: None)
         return EventListener(
             self,

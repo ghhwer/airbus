@@ -8,6 +8,11 @@ pip install airbus-client
 
 Endpoint defaults: `AIRBUS_URL`, or `AIRBUS_HOST` / `AIRBUS_PORT`, else `127.0.0.1:9097`.
 
+Push listeners register a callback host the daemon dials for `on_event`. The SDK
+auto-discovers that address; against a **remote** bus, override with
+`AIRBUS_LISTEN_HOST` or `listen_host=` / `host=` if the detected IP is not reachable
+from the daemon.
+
 ## Quick start
 
 ```python
@@ -41,6 +46,10 @@ assert q.is_ready()
 
 q.close()  # detach + stop local listener
 # or: with Queue("pipeline_jobs") as q: ...
+```
+
+```python
+q = Queue("pipeline_jobs", listen_host="10.0.0.42")  # pin callback host if needed
 ```
 
 ### Full-duplex (host ↔ device)

@@ -5,6 +5,10 @@ the local listener port via ``EventListener``.
 
 When ``client`` is omitted, uses ``RpcClient()`` (``AIRBUS_URL`` / host+port env,
 default ``127.0.0.1:9097``).
+
+``listen_host`` defaults to auto-discovery toward the Airbus peer (see
+``endpoint.resolve_listen_host``); pass an explicit host or set
+``AIRBUS_LISTEN_HOST`` to override.
 """
 
 from __future__ import annotations
@@ -34,7 +38,7 @@ class Queue:
         *,
         client: RpcClient | None = None,
         side: DuplexSide | None = None,
-        listen_host: str = "127.0.0.1",
+        listen_host: str | None = None,
     ) -> None:
         self._client = client if client is not None else RpcClient()
         self.name = name
