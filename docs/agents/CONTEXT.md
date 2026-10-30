@@ -35,13 +35,9 @@ of it. Not an enterprise ops product.
 4. **Queue modes** — `broadcast` (fan-out), `fifo` (+ optional
   `round_robin` / `single_node`), `full-duplex` (host/device sides).
 5. **Push listeners** — client opens a port; daemon calls `on_event`; client acks.
-   Python/Rust SDKs auto-discover a routable listen host toward the Airbus peer
-   (loopback peer ⇒ `127.0.0.1`). For a **remote** bus, that callback address must
-   be reachable from the daemon — override with `AIRBUS_LISTEN_HOST` or
-   `listen_host=` / `with_listen_host(...)` when needed.
 
 Endpoint env: `AIRBUS_URL` (`host:port`) or `AIRBUS_HOST` / `AIRBUS_PORT`
-(default `127.0.0.1:9097`). Callback listen host: `AIRBUS_LISTEN_HOST` (optional).
+(default `127.0.0.1:9097`).
 
 ## Minimal adopt path
 
