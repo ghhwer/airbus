@@ -18,7 +18,7 @@ packages = ["src/airbus_client"]
 
 [dependency-groups]
 dev = [
-    "datamodel-code-generator==0.78.0",
+    "datamodel-code-generator==0.81.0",
     "pytest>=9.1.1",
 ]
 
