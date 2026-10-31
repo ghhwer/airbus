@@ -18,7 +18,7 @@ daemon-side only — this package does not ship schema catalogs.
 ```ini
 ; platformio.ini
 lib_deps =
-  https://github.com/ghhwer/airbus/releases/download/v0.1.1/airbus-client-arduino-esp32-v0.1.1.zip
+  https://github.com/ghhwer/airbus/releases/download/v0.2.0/airbus-client-arduino-esp32-v0.2.0.zip
 ```
 
 Dependency: [ArduinoJson](https://arduinojson.org/) v7 (declared in `library.json`).
