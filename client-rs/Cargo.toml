@@ -1,6 +1,6 @@
 [package]
 name = "airbus-client"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 description = "Async Rust client for the Airbus JSON-RPC event bus"
 license = "MIT"
