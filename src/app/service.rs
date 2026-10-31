@@ -80,14 +80,15 @@ impl AppService {
             .create_queue(params.queue.as_str(), mode, strategy)
             .map_err(InvalidParams::new)?;
 
-        let mode = self
+        let (mode, dispatch_strategy) = self
             .queue_manager
-            .get_queue_mode(params.queue.as_str())
+            .get_queue_config(params.queue.as_str())
             .ok_or_else(|| InvalidParams::new("Queue does not exist"))?;
 
         Ok(CreateQueueResult {
             created,
             mode,
+            dispatch_strategy,
             queue: params.queue,
         })
     }
@@ -128,10 +129,11 @@ impl AppService {
             .queue_manager
             .list()
             .into_iter()
-            .filter_map(|(name, depth, mode, listener_count)| {
+            .filter_map(|(name, depth, mode, dispatch_strategy, listener_count)| {
                 let name = QueueName::try_from(name).ok()?;
                 Some(QueueInfo {
                     depth: depth as u64,
+                    dispatch_strategy,
                     listener_count: listener_count as u64,
                     mode,
                     name,

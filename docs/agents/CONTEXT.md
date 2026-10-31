@@ -48,8 +48,7 @@ docker run --rm -p 9097:9097 -p 9098:9098 ghcr.io/ghhwer/airbus:latest
 ```python
 # pip install airbus-client
 from airbus_client import Queue, QueueMode
-q = Queue("jobs")
-q.create(QueueMode.fifo)
+q = Queue("jobs", mode=QueueMode.fifo)
 q.attach(lambda e: print(e["event"]))
 q.post({"type": "hello"})
 ```

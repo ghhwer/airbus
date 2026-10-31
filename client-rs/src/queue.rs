@@ -1,4 +1,8 @@
-//! Thin named-queue handle — create / delete / attach / post / readiness over Airbus RPC.
+//! Thin named-queue handle — ensure / delete / attach / post / readiness over Airbus RPC.
+//!
+//! [`Queue::connect`] / [`Queue::connect_with`] **ensure** the named queue exists with
+//! the given [`QueueMode`] (and optional [`DispatchStrategy`]): create if missing, or
+//! error if it already exists with different config. That is a network round-trip.
 //!
 //! Listen host defaults to auto-discovery toward the Airbus peer (see
 //! [`crate::endpoint::resolve_listen_host`]); pass [`Queue::with_listen_host`] or set
@@ -17,24 +21,60 @@ use std::future::Future;
 pub struct Queue {
     client: RpcClient,
     pub name: String,
+    pub mode: QueueMode,
     pub side: Option<DuplexSide>,
+    pub dispatch_strategy: Option<DispatchStrategy>,
     listen_host: Option<String>,
     listener: Option<EventListener>,
 }
 
 impl Queue {
-    pub fn new(name: impl Into<String>, client: Option<RpcClient>) -> Result<Self, ClientError> {
+    /// Ensure the queue exists with `mode` (strategy defaults per daemon rules).
+    pub async fn connect(
+        name: impl Into<String>,
+        mode: QueueMode,
+        client: Option<RpcClient>,
+    ) -> Result<Self, ClientError> {
+        Self::connect_with(name, mode, None, client).await
+    }
+
+    /// Ensure the queue exists with `mode` and optional `dispatch_strategy`.
+    pub async fn connect_with(
+        name: impl Into<String>,
+        mode: QueueMode,
+        dispatch_strategy: Option<DispatchStrategy>,
+        client: Option<RpcClient>,
+    ) -> Result<Self, ClientError> {
         let client = match client {
             Some(c) => c,
             None => RpcClient::from_env()?,
         };
-        Ok(Self {
+        let q = Self {
             client,
             name: name.into(),
+            mode,
             side: None,
+            dispatch_strategy,
             listen_host: None,
             listener: None,
-        })
+        };
+        q.ensure().await?;
+        Ok(q)
+    }
+
+    async fn ensure(&self) -> Result<(), ClientError> {
+        let queue: QueueName = self
+            .name
+            .parse()
+            .map_err(|e: crate::payloads::error::ConversionError| ClientError::Other(e.to_string()))?;
+        self.client
+            .create_queue(&CreateQueueParams {
+                queue,
+                mode: Some(self.mode),
+                dispatch_strategy: self.dispatch_strategy,
+            })
+            .await?;
+        Ok(())
     }
 
     pub fn with_side(mut self, side: DuplexSide) -> Self {
@@ -46,26 +86,6 @@ impl Queue {
     pub fn with_listen_host(mut self, host: impl Into<String>) -> Self {
         self.listen_host = Some(host.into());
         self
-    }
-
-    pub async fn create(
-        &self,
-        mode: QueueMode,
-        dispatch_strategy: Option<DispatchStrategy>,
-    ) -> Result<bool, ClientError> {
-        let queue: QueueName = self
-            .name
-            .parse()
-            .map_err(|e: crate::payloads::error::ConversionError| ClientError::Other(e.to_string()))?;
-        let result = self
-            .client
-            .create_queue(&CreateQueueParams {
-                queue,
-                mode: Some(mode),
-                dispatch_strategy,
-            })
-            .await?;
-        Ok(result.created)
     }
 
     pub async fn delete(&mut self) -> Result<bool, ClientError> {
@@ -95,7 +115,7 @@ impl Queue {
         if self.listener.is_some() {
             self.close().await;
         }
-        let mut listener = self.client.listen(self.name.clone());
+        let mut listener = EventListener::new(self.client.clone(), self.name.clone());
         if let Some(host) = self.listen_host.clone() {
             listener = listener.host(host);
         }

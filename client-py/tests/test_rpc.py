@@ -7,6 +7,7 @@ import uuid
 
 import pytest
 
+from airbus_client import Queue
 from airbus_client.payloads import (
     AttachListenerParams,
     CreateQueueParams,
@@ -190,9 +191,12 @@ def test_listen_broadcast(rpc: RpcClient) -> None:
     events_a: list[dict] = []
     events_b: list[dict] = []
 
-    with rpc.listen(queue, on_event=events_a.append), rpc.listen(
-        queue, on_event=events_b.append
+    with (
+        Queue(queue, mode=QueueMode.broadcast, client=rpc) as qa,
+        Queue(queue, mode=QueueMode.broadcast, client=rpc) as qb,
     ):
+        qa.attach(events_a.append)
+        qb.attach(events_b.append)
         listed = rpc.list_listeners(ListListenersParams(queue=queue))
         assert len(listed.listeners) == 2
 
@@ -211,7 +215,6 @@ def test_listen_broadcast(rpc: RpcClient) -> None:
         assert events_b[0]["id"] == posted.id
         assert events_b[0]["event"] == {"broadcast": "hello"}
 
-    # Context exit auto-detaches
     listed_after = rpc.list_listeners(ListListenersParams(queue=queue))
     assert len(listed_after.listeners) == 0
 
@@ -223,9 +226,12 @@ def test_listen_competing_fifo(rpc: RpcClient) -> None:
     worker1_events: list[dict] = []
     worker2_events: list[dict] = []
 
-    with rpc.listen(queue, on_event=worker1_events.append), rpc.listen(
-        queue, on_event=worker2_events.append
+    with (
+        Queue(queue, mode=QueueMode.fifo, client=rpc) as w1,
+        Queue(queue, mode=QueueMode.fifo, client=rpc) as w2,
     ):
+        w1.attach(worker1_events.append)
+        w2.attach(worker2_events.append)
         for i in range(4):
             rpc.post_event(PostEventParams(queue=queue, event={"task_id": i}))
 
@@ -257,9 +263,12 @@ def test_broadcast_retries_only_unacknowledged_listeners(
         if exhaust or len(attempts) == 1:
             raise RuntimeError("temporary delivery failure")
 
-    with rpc.listen(queue, on_event=healthy_events.append), rpc.listen(
-        queue, on_event=intermittent_listener, max_retries=2
+    with (
+        Queue(queue, mode=QueueMode.broadcast, client=rpc) as healthy,
+        Queue(queue, mode=QueueMode.broadcast, client=rpc) as flaky,
     ):
+        healthy.attach(healthy_events.append)
+        flaky.attach(intermittent_listener, max_retries=2)
         posted = rpc.post_event(PostEventParams(queue=queue, event={"retry": True}))
         deadline = time.monotonic() + 3.0
         while time.monotonic() < deadline:
@@ -278,13 +287,14 @@ def test_broadcast_retries_only_unacknowledged_listeners(
 
 
 def test_failed_listener_start_cleans_up(rpc: RpcClient) -> None:
-    listener = rpc.listen(f"missing-{uuid.uuid4()}")
-    with pytest.raises(RpcError, match="does not exist"), listener:
-        pytest.fail("registration should fail")
+    name = f"missing-{uuid.uuid4()}"
+    q = Queue(name, mode=QueueMode.broadcast, client=rpc)
+    rpc.delete_queue(DeleteQueueParams(queue=name))
+    with pytest.raises(RpcError, match="does not exist"):
+        q.attach(lambda _e: None)
 
-    assert listener.listener_id is None
-    assert listener._thread is None
-    assert listener._server_sock.fileno() == -1
+    assert q._listener is None
+    assert len(rpc.list_listeners().listeners) == 0
 
 
 def test_server_listener_eviction_on_dead_port(rpc: RpcClient) -> None:
@@ -366,7 +376,8 @@ def test_broadcast_retains_event_when_listener_dies_and_evicts(rpc: RpcClient) -
 
     # A new listener attaching should receive the event
     received = []
-    with rpc.listen(queue, on_event=received.append):
+    with Queue(queue, mode=QueueMode.broadcast, client=rpc) as q:
+        q.attach(received.append)
         deadline = time.monotonic() + 3.0
         while time.monotonic() < deadline:
             if len(received) == 1:

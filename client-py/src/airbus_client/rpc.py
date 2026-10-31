@@ -144,7 +144,7 @@ class _BatchContext(AbstractContextManager["RpcClient"]):
 
 
 class EventListener:
-    """Client-side port listener that receives real-time events pushed from Airbus."""
+    """Local push-listener handle returned by ``Queue.attach`` (not constructed directly)."""
 
     def __init__(
         self,
@@ -412,30 +412,6 @@ class RpcClient:
             "queue_ready",
             params,
             partial(proto.decode_result, "queue_ready", QueueReadyResult),
-        )
-
-    def listen(
-        self,
-        queue: str,
-        on_event: Callable[[dict[str, Any]], Any] | None = None,
-        *,
-        host: str | None = None,
-        exhaustion_timeout_ms: int | None = None,
-        max_retries: int | None = None,
-        side: DuplexSide | None = None,
-        max_events: int | None = None,
-    ) -> EventListener:
-        """Bind a push listener. ``host`` defaults to auto-discovery (see endpoint)."""
-        cb = on_event if on_event is not None else (lambda e: None)
-        return EventListener(
-            self,
-            queue,
-            cb,
-            host=host,
-            exhaustion_timeout_ms=exhaustion_timeout_ms,
-            max_retries=max_retries,
-            side=side,
-            max_events=max_events,
         )
 
     def _invoke(

@@ -10,8 +10,8 @@ Endpoint defaults: `AIRBUS_URL`, or `AIRBUS_HOST` / `AIRBUS_PORT`, else `127.0.0
 
 Push listeners register a callback host the daemon dials for `on_event`. The SDK
 auto-discovers that address; against a **remote** bus, override with
-`AIRBUS_LISTEN_HOST` or `listen_host=` / `host=` if the detected IP is not reachable
-from the daemon.
+`AIRBUS_LISTEN_HOST` or `listen_host=` if the detected IP is not reachable from the
+daemon.
 
 ## Quick start
 
@@ -26,15 +26,20 @@ client = RpcClient("127.0.0.1", 9097)
 client = RpcClient.from_url("10.0.0.5:9097")
 ```
 
-## Preferred API: `Queue`
+## Attach and queues: `Queue`
 
-Most apps use the named-queue handle for create / post / attach:
+`Queue(...)` **requires `mode`** and **ensures** the queue on construct (network I/O):
+creates it if missing, or raises if it already exists with a different mode/strategy.
+Reuse a connection with `client=`.
 
 ```python
 from airbus_client import DispatchStrategy, Queue, QueueMode
 
-q = Queue("pipeline_jobs")
-q.create(QueueMode.fifo, dispatch_strategy=DispatchStrategy.round_robin)
+q = Queue(
+    "pipeline_jobs",
+    mode=QueueMode.fifo,
+    dispatch_strategy=DispatchStrategy.round_robin,  # fifo only; omit → round_robin
+)
 
 def on_event(event: dict) -> None:
     # event shape: {"id": "...", "queue": "...", "event": {...}}
@@ -45,11 +50,11 @@ assert q.post({"type": "job", "n": 1})
 assert q.is_ready()
 
 q.close()  # detach + stop local listener
-# or: with Queue("pipeline_jobs") as q: ...
+# or: with Queue("pipeline_jobs", mode=QueueMode.fifo) as q: ...
 ```
 
 ```python
-q = Queue("pipeline_jobs", listen_host="10.0.0.42")  # pin callback host if needed
+q = Queue("pipeline_jobs", mode=QueueMode.fifo, listen_host="10.0.0.42")  # pin callback host
 ```
 
 ### Full-duplex (host ↔ device)
@@ -57,10 +62,9 @@ q = Queue("pipeline_jobs", listen_host="10.0.0.42")  # pin callback host if need
 ```python
 from airbus_client import DuplexSide, Queue, QueueMode
 
-host = Queue("link", side=DuplexSide.host)
-device = Queue("link", side=DuplexSide.device)
+host = Queue("link", mode=QueueMode.full_duplex, side=DuplexSide.host)
+device = Queue("link", mode=QueueMode.full_duplex, side=DuplexSide.device)
 
-host.create(QueueMode.full_duplex)
 host.attach(lambda e: print("host got", e["event"]))
 device.attach(lambda e: print("device got", e["event"]))
 
@@ -68,8 +72,8 @@ host.post({"from": "host"})    # → device
 device.post({"from": "device"})  # → host
 ```
 
-`try_attach` / `post` return `None` / `False` when the queue is missing (useful for device
-backoff). See [Queues & Dispatch](../queues-and-dispatch.md) for mode rules.
+`try_attach` / `post` return `None` / `False` when the queue was deleted under you.
+See [Queues & Dispatch](../queues-and-dispatch.md) for mode rules.
 
 ## Raw RPC: `RpcClient`
 
@@ -98,15 +102,9 @@ print(client.list_queues().queues)
 Other methods: `delete_queue`, `attach_listener`, `detach_listener`, `list_listeners`,
 `queue_ready`, plus `ping` / `add` for smoke tests. Escape hatch: `call` / `notify`.
 
-### Listen without `Queue`
-
-```python
-with client.listen("jobs", on_event=print) as listener:
-    client.post_event(PostEventParams(queue="jobs", event={"n": 1}))
-    # listener.port / listener.listener_id / listener.events
-```
-
-The context manager binds an ephemeral port, calls `attach_listener`, and detaches on exit.
+Push delivery still goes through `Queue.attach` (reuse the client with
+`Queue("jobs", mode=..., client=client)`). Raw `attach_listener` only registers a
+host/port the daemon should dial — it does not bind a local listener for you.
 
 ### Batches
 
@@ -146,7 +144,7 @@ Requires an `airbus` binary on `AIRBUS_BIN` (default `out/airbus` after `make bu
 
 | Import | Role |
 | ------ | ---- |
-| `airbus_client` | Public: `RpcClient`, `Queue`, `EventListener`, modes, `start_server` |
+| `airbus_client` | Public: `Queue`, `RpcClient`, modes, `start_server` (`EventListener` from `attach`) |
 | `airbus_client.payloads` | Generated `*Params` / `*Result` |
 | `protocol` / `binary` / `endpoint` | Internals |
 

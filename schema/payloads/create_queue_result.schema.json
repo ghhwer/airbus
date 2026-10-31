@@ -4,13 +4,16 @@
   "title": "CreateQueueResult",
   "type": "object",
   "additionalProperties": false,
-  "required": ["queue", "mode", "created"],
+  "required": ["queue", "mode", "dispatch_strategy", "created"],
   "properties": {
     "queue": {
       "$ref": "common.schema.json#/$defs/QueueName"
     },
     "mode": {
       "$ref": "common.schema.json#/$defs/QueueMode"
+    },
+    "dispatch_strategy": {
+      "$ref": "common.schema.json#/$defs/DispatchStrategy"
     },
     "created": {
       "type": "boolean"

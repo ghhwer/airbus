@@ -1,6 +1,7 @@
 //! Named-queue handle integration tests.
 
-use airbus_client::payloads::{CreateQueueParams, QueueReadyParams};
+use airbus_client::payloads::{DeleteQueueParams, DispatchStrategy, QueueReadyParams};
+use airbus_client::rpc::ClientError;
 use airbus_client::{start_server, DuplexSide, Queue, QueueMode};
 use serde_json::{json, Map, Value};
 use std::sync::Arc;
@@ -28,15 +29,14 @@ async fn test_full_duplex_cross_route() {
     let device_got: Arc<Mutex<Vec<Value>>> = Arc::new(Mutex::new(Vec::new()));
     let ready = Arc::new(Notify::new());
 
-    let mut host = Queue::new(name.clone(), Some(rpc.clone()))
+    let mut host = Queue::connect(name.clone(), QueueMode::FullDuplex, Some(rpc.clone()))
+        .await
         .unwrap()
         .with_side(DuplexSide::Host);
-    let mut device = Queue::new(name.clone(), Some(rpc.clone()))
+    let mut device = Queue::connect(name.clone(), QueueMode::FullDuplex, Some(rpc.clone()))
+        .await
         .unwrap()
         .with_side(DuplexSide::Device);
-
-    assert!(host.create(QueueMode::FullDuplex, None).await.unwrap());
-    assert!(!host.create(QueueMode::FullDuplex, None).await.unwrap());
 
     let hg = Arc::clone(&host_got);
     host.attach(
@@ -125,12 +125,60 @@ async fn test_full_duplex_cross_route() {
 }
 
 #[tokio::test]
-async fn test_device_try_attach_backs_off_when_missing() {
+async fn test_ensure_rejects_mode_mismatch() {
+    let guard = start_server().await.unwrap();
+    let name = queue_name("mismatch");
+    Queue::connect(name.clone(), QueueMode::Fifo, Some(guard.client.clone()))
+        .await
+        .unwrap();
+    match Queue::connect(name, QueueMode::Broadcast, Some(guard.client.clone())).await {
+        Err(ClientError::Rpc(e)) => assert!(e.message.contains("exists with mode="), "{e}"),
+        Err(other) => panic!("unexpected: {other}"),
+        Ok(_) => panic!("expected mismatch error"),
+    }
+}
+
+#[tokio::test]
+async fn test_ensure_rejects_strategy_mismatch() {
+    let guard = start_server().await.unwrap();
+    let name = queue_name("strat");
+    Queue::connect_with(
+        name.clone(),
+        QueueMode::Fifo,
+        Some(DispatchStrategy::RoundRobin),
+        Some(guard.client.clone()),
+    )
+    .await
+    .unwrap();
+    match Queue::connect_with(
+        name,
+        QueueMode::Fifo,
+        Some(DispatchStrategy::SingleNode),
+        Some(guard.client.clone()),
+    )
+    .await
+    {
+        Err(ClientError::Rpc(e)) => assert!(e.message.contains("strategy="), "{e}"),
+        Err(other) => panic!("unexpected: {other}"),
+        Ok(_) => panic!("expected mismatch error"),
+    }
+}
+
+#[tokio::test]
+async fn test_try_attach_backs_off_when_queue_deleted() {
     let guard = start_server().await.unwrap();
     let name = queue_name("missing");
-    let mut device = Queue::new(name, Some(guard.client.clone()))
+    let mut device = Queue::connect(name.clone(), QueueMode::FullDuplex, Some(guard.client.clone()))
+        .await
         .unwrap()
         .with_side(DuplexSide::Device);
+    guard
+        .client
+        .delete_queue(&DeleteQueueParams {
+            queue: name.parse().unwrap(),
+        })
+        .await
+        .unwrap();
     assert!(device
         .try_attach(|_| async { Ok(()) }, None, None, None)
         .await
@@ -141,19 +189,20 @@ async fn test_device_try_attach_backs_off_when_missing() {
 }
 
 #[tokio::test]
-async fn test_fifo_and_broadcast_ready_when_queue_exists() {
+async fn test_fifo_and_broadcast_ready_when_ensured() {
     let guard = start_server().await.unwrap();
     let rpc = guard.client.clone();
     let fifo_name = queue_name("fifo");
     let bcast_name = queue_name("bcast");
 
-    let fifo = Queue::new(fifo_name.clone(), Some(rpc.clone())).unwrap();
-    assert!(!fifo.is_ready().await.unwrap());
-    assert!(fifo.create(QueueMode::Fifo, None).await.unwrap());
+    let fifo = Queue::connect(fifo_name.clone(), QueueMode::Fifo, Some(rpc.clone()))
+        .await
+        .unwrap();
     assert!(fifo.is_ready().await.unwrap());
 
-    let bcast = Queue::new(bcast_name, Some(rpc.clone())).unwrap();
-    assert!(bcast.create(QueueMode::Broadcast, None).await.unwrap());
+    let bcast = Queue::connect(bcast_name, QueueMode::Broadcast, Some(rpc.clone()))
+        .await
+        .unwrap();
     assert!(bcast.is_ready().await.unwrap());
 
     assert!(rpc
@@ -163,21 +212,15 @@ async fn test_fifo_and_broadcast_ready_when_queue_exists() {
         .await
         .unwrap()
         .ready);
-    rpc.create_queue(&CreateQueueParams {
-        queue: queue_name("raw").parse().unwrap(),
-        mode: Some(QueueMode::Fifo),
-        dispatch_strategy: None,
-    })
-    .await
-    .unwrap();
 }
 
 #[tokio::test]
 async fn test_queue_delete() {
     let guard = start_server().await.unwrap();
     let name = queue_name("gone");
-    let mut q = Queue::new(name, Some(guard.client.clone())).unwrap();
-    assert!(q.create(QueueMode::Broadcast, None).await.unwrap());
+    let mut q = Queue::connect(name, QueueMode::Broadcast, Some(guard.client.clone()))
+        .await
+        .unwrap();
     assert!(q.delete().await.unwrap());
     assert!(!q.is_ready().await.unwrap());
     assert!(!q.delete().await.unwrap());

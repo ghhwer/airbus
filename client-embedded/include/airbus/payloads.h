@@ -99,28 +99,6 @@ inline bool fromJson(JsonVariantConst src, QueueMode& value, String& err) {
   return false;
 }
 
-enum class DuplexSide {
-  Host,
-  Device,
-};
-
-inline bool toJson(JsonVariant dest, DuplexSide value, String& /*err*/) {
-  switch (value) {
-    case DuplexSide::Host: dest.set("host"); return true;
-    case DuplexSide::Device: dest.set("device"); return true;
-  }
-  return false;
-}
-
-inline bool fromJson(JsonVariantConst src, DuplexSide& value, String& err) {
-  const char* s = src.as<const char*>();
-  if (s == nullptr) { err = "invalid DuplexSide"; return false; }
-  if (strcmp(s, "host") == 0) { value = DuplexSide::Host; return true; }
-  if (strcmp(s, "device") == 0) { value = DuplexSide::Device; return true; }
-  err = "invalid DuplexSide";
-  return false;
-}
-
 enum class DispatchStrategy {
   RoundRobin,
   SingleNode,
@@ -140,6 +118,28 @@ inline bool fromJson(JsonVariantConst src, DispatchStrategy& value, String& err)
   if (strcmp(s, "round_robin") == 0) { value = DispatchStrategy::RoundRobin; return true; }
   if (strcmp(s, "single_node") == 0) { value = DispatchStrategy::SingleNode; return true; }
   err = "invalid DispatchStrategy";
+  return false;
+}
+
+enum class DuplexSide {
+  Host,
+  Device,
+};
+
+inline bool toJson(JsonVariant dest, DuplexSide value, String& /*err*/) {
+  switch (value) {
+    case DuplexSide::Host: dest.set("host"); return true;
+    case DuplexSide::Device: dest.set("device"); return true;
+  }
+  return false;
+}
+
+inline bool fromJson(JsonVariantConst src, DuplexSide& value, String& err) {
+  const char* s = src.as<const char*>();
+  if (s == nullptr) { err = "invalid DuplexSide"; return false; }
+  if (strcmp(s, "host") == 0) { value = DuplexSide::Host; return true; }
+  if (strcmp(s, "device") == 0) { value = DuplexSide::Device; return true; }
+  err = "invalid DuplexSide";
   return false;
 }
 
@@ -166,6 +166,7 @@ struct QueueInfo {
   String name{};
   std::int64_t depth{};
   QueueMode mode{};
+  DispatchStrategy dispatch_strategy{};
   std::int64_t listener_count{};
 };
 
@@ -173,6 +174,7 @@ inline bool toJson(JsonObject dest, const QueueInfo& value, String& err) {
   dest["name"] = value.name;
   dest["depth"] = value.depth;
   if (!toJson(dest["mode"], value.mode, err)) return false;
+  if (!toJson(dest["dispatch_strategy"], value.dispatch_strategy, err)) return false;
   dest["listener_count"] = value.listener_count;
   return true;
 }
@@ -183,6 +185,7 @@ inline bool fromJson(JsonObjectConst src, QueueInfo& value, String& err) {
   if (!src["depth"].is<std::int64_t>() && !src["depth"].is<int>()) { err = "missing depth"; return false; }
   value.depth = src["depth"].as<std::int64_t>();
   if (!fromJson(src["mode"], value.mode, err)) return false;
+  if (!fromJson(src["dispatch_strategy"], value.dispatch_strategy, err)) return false;
   if (!src["listener_count"].is<std::int64_t>() && !src["listener_count"].is<int>()) { err = "missing listener_count"; return false; }
   value.listener_count = src["listener_count"].as<std::int64_t>();
   return true;
@@ -404,12 +407,14 @@ inline bool fromJson(JsonObjectConst src, CreateQueueParams& value, String& err)
 struct CreateQueueResult {
   String queue{};
   QueueMode mode{};
+  DispatchStrategy dispatch_strategy{};
   bool created{};
 };
 
 inline bool toJson(JsonObject dest, const CreateQueueResult& value, String& err) {
   dest["queue"] = value.queue;
   if (!toJson(dest["mode"], value.mode, err)) return false;
+  if (!toJson(dest["dispatch_strategy"], value.dispatch_strategy, err)) return false;
   dest["created"] = value.created;
   return true;
 }
@@ -418,6 +423,7 @@ inline bool fromJson(JsonObjectConst src, CreateQueueResult& value, String& err)
   if (src["queue"].isNull()) { err = "missing queue"; return false; }
   value.queue = src["queue"].as<String>();
   if (!fromJson(src["mode"], value.mode, err)) return false;
+  if (!fromJson(src["dispatch_strategy"], value.dispatch_strategy, err)) return false;
   if (!src["created"].is<bool>()) { err = "missing created"; return false; }
   value.created = src["created"].as<bool>();
   return true;

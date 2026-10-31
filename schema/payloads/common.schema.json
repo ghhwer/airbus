@@ -22,7 +22,7 @@
       "title": "QueueInfo",
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "depth", "mode", "listener_count"],
+      "required": ["name", "depth", "mode", "dispatch_strategy", "listener_count"],
       "properties": {
         "name": {
           "$ref": "#/$defs/QueueName"
@@ -33,6 +33,9 @@
         },
         "mode": {
           "$ref": "#/$defs/QueueMode"
+        },
+        "dispatch_strategy": {
+          "$ref": "#/$defs/DispatchStrategy"
         },
         "listener_count": {
           "type": "integer",

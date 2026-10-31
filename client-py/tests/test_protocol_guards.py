@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from airbus_client import Queue
 from airbus_client.rpc import RpcClient
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -121,9 +122,12 @@ def test_generated_result_decode_rejects_invalid_enum(monkeypatch):
 def test_listener_rejects_invalid_requests_before_callback(rpc, document):
     from airbus_client.payloads import CreateQueueParams
 
+    from airbus_client import QueueMode
+
     events = []
     rpc.create_queue(CreateQueueParams(queue="demo"))
-    with rpc.listen("demo", on_event=events.append) as listener:
+    with Queue("demo", mode=QueueMode.broadcast, client=rpc) as q:
+        listener = q.attach(events.append)
         response = RpcClient("127.0.0.1", listener.port)._raw(document)
         assert events == []
         assert "error" in response
@@ -155,7 +159,15 @@ def test_codec_preserves_user_nulls_and_decodes_nested_models():
         "list_queues",
         ListQueuesResult,
         {
-            "queues": [{"name": "demo", "depth": 0, "mode": "broadcast", "listener_count": 1}],
+            "queues": [
+                {
+                    "name": "demo",
+                    "depth": 0,
+                    "mode": "broadcast",
+                    "dispatch_strategy": "round_robin",
+                    "listener_count": 1,
+                }
+            ],
         },
     )
     assert isinstance(result.queues[0], QueueInfo)

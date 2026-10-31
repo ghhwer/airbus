@@ -47,7 +47,16 @@ impl QueueManager {
         strategy: DispatchStrategy,
     ) -> Result<bool, String> {
         let mut map = self.queues.lock().map_err(|_| "queue manager poisoned")?;
-        if map.contains_key(queue_name) {
+        if let Some(existing) = map.get(queue_name) {
+            let q = existing.lock().map_err(|_| "queue poisoned")?;
+            let existing_mode = q.mode();
+            let existing_strategy = q.dispatch_strategy();
+            if existing_mode != mode || existing_strategy != strategy {
+                return Err(format!(
+                    "queue '{queue_name}' exists with mode={existing_mode} strategy={existing_strategy}, \
+                     requested mode={mode} strategy={strategy}"
+                ));
+            }
             Ok(false)
         } else {
             map.insert(
@@ -71,6 +80,15 @@ impl QueueManager {
         let q = self.find_queue(queue_name).ok()?;
         let guard = q.lock().ok()?;
         Some(guard.mode())
+    }
+
+    pub fn get_queue_config(
+        &self,
+        queue_name: &str,
+    ) -> Option<(QueueMode, DispatchStrategy)> {
+        let q = self.find_queue(queue_name).ok()?;
+        let guard = q.lock().ok()?;
+        Some((guard.mode(), guard.dispatch_strategy()))
     }
 
     /// Mode-aware readiness: missing → false; otherwise delegates to the queue.
@@ -100,16 +118,22 @@ impl QueueManager {
         Ok(())
     }
 
-    pub fn list(&self) -> Vec<(String, usize, QueueMode, usize)> {
+    pub fn list(&self) -> Vec<(String, usize, QueueMode, DispatchStrategy, usize)> {
         let map = match self.queues.lock() {
             Ok(m) => m,
             Err(_) => return Vec::new(),
         };
-        let mut out: Vec<(String, usize, QueueMode, usize)> = map
+        let mut out: Vec<(String, usize, QueueMode, DispatchStrategy, usize)> = map
             .iter()
             .filter_map(|(name, queue)| {
                 let q = queue.lock().ok()?;
-                Some((name.clone(), q.depth(), q.mode(), q.listener_count()))
+                Some((
+                    name.clone(),
+                    q.depth(),
+                    q.mode(),
+                    q.dispatch_strategy(),
+                    q.listener_count(),
+                ))
             })
             .collect();
         out.sort_by(|a, b| a.0.cmp(&b.0));

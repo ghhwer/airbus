@@ -372,8 +372,20 @@ fn queue_manager_list_and_peek() {
     assert_eq!(
         listed,
         vec![
-            ("jobs".into(), 2, QueueMode::Broadcast, 0),
-            ("other".into(), 1, QueueMode::Broadcast, 0)
+            (
+                "jobs".into(),
+                2,
+                QueueMode::Broadcast,
+                DispatchStrategy::RoundRobin,
+                0
+            ),
+            (
+                "other".into(),
+                1,
+                QueueMode::Broadcast,
+                DispatchStrategy::RoundRobin,
+                0
+            )
         ]
     );
 
@@ -385,8 +397,20 @@ fn queue_manager_list_and_peek() {
     assert_eq!(
         manager.list(),
         vec![
-            ("jobs".into(), 2, QueueMode::Broadcast, 0),
-            ("other".into(), 1, QueueMode::Broadcast, 0)
+            (
+                "jobs".into(),
+                2,
+                QueueMode::Broadcast,
+                DispatchStrategy::RoundRobin,
+                0
+            ),
+            (
+                "other".into(),
+                1,
+                QueueMode::Broadcast,
+                DispatchStrategy::RoundRobin,
+                0
+            )
         ]
     );
 }
@@ -547,6 +571,7 @@ fn test_create_queue_lifecycle() {
         .unwrap();
     assert_eq!(res.queue.as_str(), "tasks");
     assert_eq!(res.mode, QueueMode::Fifo);
+    assert_eq!(res.dispatch_strategy, DispatchStrategy::RoundRobin);
     assert!(res.created);
 
     // Idempotent re-creation returns created: false
@@ -559,21 +584,41 @@ fn test_create_queue_lifecycle() {
         .unwrap();
     assert_eq!(res2.queue.as_str(), "tasks");
     assert!(!res2.created);
+    assert_eq!(res2.dispatch_strategy, DispatchStrategy::RoundRobin);
 
-    let existing = app
-        .create_queue(create_params("tasks", None, None))
+    let listed = app.list_queues();
+    let tasks = listed
+        .queues
+        .iter()
+        .find(|q| q.name.as_str() == "tasks")
         .unwrap();
-    assert!(!existing.created);
-    assert_eq!(existing.mode, QueueMode::Fifo);
-    assert_eq!(
-        app.list_queues()
-            .queues
-            .iter()
-            .find(|q| q.name.as_str() == "tasks")
-            .unwrap()
-            .mode,
-        existing.mode
-    );
+    assert_eq!(tasks.mode, QueueMode::Fifo);
+    assert_eq!(tasks.dispatch_strategy, DispatchStrategy::RoundRobin);
+}
+
+#[test]
+fn create_queue_rejects_config_mismatch() {
+    let app = AppService::new();
+    app.create_queue(create_params(
+        "tasks",
+        Some(QueueMode::Fifo),
+        Some(DispatchStrategy::RoundRobin),
+    ))
+    .unwrap();
+
+    let err = app
+        .create_queue(create_params("tasks", Some(QueueMode::Broadcast), None))
+        .unwrap_err();
+    assert!(err.to_string().contains("exists with mode="), "{err}");
+
+    let err = app
+        .create_queue(create_params(
+            "tasks",
+            Some(QueueMode::Fifo),
+            Some(DispatchStrategy::SingleNode),
+        ))
+        .unwrap_err();
+    assert!(err.to_string().contains("strategy="), "{err}");
 }
 
 #[test]

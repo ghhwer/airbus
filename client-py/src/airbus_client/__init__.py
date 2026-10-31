@@ -5,10 +5,10 @@ types live under ``airbus_client.payloads`` for raw RPC. ``protocol``,
 ``binary``, and ``endpoint`` are operational internals.
 
 Endpoint defaults: ``AIRBUS_URL`` or ``AIRBUS_HOST``/``AIRBUS_PORT`` (else
-``127.0.0.1:9097``). ``RpcClient()`` and ``Queue(name)`` use that resolution;
-pass ``client=`` for ephemeral test servers. Push-listener callback host
-auto-discovers toward the peer unless ``AIRBUS_LISTEN_HOST`` / ``listen_host=``
-is set.
+``127.0.0.1:9097``). Prefer ``Queue(name, mode=...)`` which ensures the queue on
+construct (pass ``client=`` to reuse an ``RpcClient``). Push-listener callback
+host auto-discovers toward the peer unless ``AIRBUS_LISTEN_HOST`` /
+``listen_host=`` is set.
 """
 
 from airbus_client.binary import run_airbus
