@@ -7,15 +7,20 @@ delivery reliability mechanisms in Airbus. Method shapes: `[schema/openrpc.json]
 
 Queues in Airbus are named in-memory channels configured with specific delivery semantics.
 
-### Creating a Queue (python example)
+### Ensuring a Queue (python example)
 
-Prefer the thin `Queue` handle (mode is a create argument). Raw `RpcClient` + params remain available for advanced use:
+Prefer the thin `Queue` handle: **constructing it requires `mode` and ensures** the
+queue (create if missing; error if it exists with a different mode/strategy). That is
+a network round-trip. Raw `RpcClient` + params remain available for advanced use:
 
 ```python
 from airbus_client import Queue, QueueMode, DispatchStrategy
 
-q = Queue("pipeline_jobs")  # AIRBUS_URL / host+port env, else 127.0.0.1:9097
-q.create(QueueMode.fifo, dispatch_strategy=DispatchStrategy.round_robin)
+q = Queue(
+    "pipeline_jobs",  # AIRBUS_URL / host+port env, else 127.0.0.1:9097
+    mode=QueueMode.fifo,
+    dispatch_strategy=DispatchStrategy.round_robin,
+)
 ```
 
 Equivalent raw RPC:
@@ -45,7 +50,7 @@ These are **two different knobs**. Do not confuse them:
 | **Dispatch strategy** | `dispatch_strategy` | How a **fifo** queue picks among multiple listeners. **Fifo only.**                              |
 
 
-`create_queue` **rejects** `dispatch_strategy` when `mode` is `broadcast` or `full-duplex` (including when `mode` is omitted and defaults to `broadcast`). Error: `dispatch_strategy is only valid when mode is fifo`. Omitting the field is always fine. Params: `[create_queue_params.schema.json](../schema/payloads/create_queue_params.schema.json)`.
+`create_queue` **rejects** `dispatch_strategy` when `mode` is `broadcast` or `full-duplex` (including when `mode` is omitted and defaults to `broadcast`). Error: `dispatch_strategy is only valid when mode is fifo`. Omitting the field is fine (fifo defaults to `round_robin`). If the queue **already exists** with a different mode or strategy, `create_queue` errors instead of silently no-oping. Params: `[create_queue_params.schema.json](../schema/payloads/create_queue_params.schema.json)`. `list_queues` exposes both `mode` and `dispatch_strategy` on each `QueueInfo`.
 
 ### Queue Modes
 

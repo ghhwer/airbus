@@ -331,6 +331,7 @@ pub struct CreateQueueParams {
 #[serde(deny_unknown_fields)]
 pub struct CreateQueueResult {
     pub created: bool,
+    pub dispatch_strategy: DispatchStrategy,
     pub mode: QueueMode,
     pub queue: QueueName,
 }
@@ -966,6 +967,7 @@ impl<'de> ::serde::Deserialize<'de> for PostEventResultId {
 #[serde(deny_unknown_fields)]
 pub struct QueueInfo {
     pub depth: u64,
+    pub dispatch_strategy: DispatchStrategy,
     pub listener_count: u64,
     pub mode: QueueMode,
     pub name: QueueName,

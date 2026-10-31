@@ -1,7 +1,11 @@
-"""Thin named-queue handle — create / delete / attach / post / readiness over Airbus RPC.
+"""Thin named-queue handle — ensure / delete / attach / post / readiness over Airbus RPC.
 
 Mode and side policy live in the Rust engine; this module only wraps RPC and owns
 the local listener port via ``EventListener``.
+
+Constructing a ``Queue`` **ensures** the named queue exists with the given ``mode``
+(and optional ``dispatch_strategy``): creates it if missing, or raises if it already
+exists with different config. That is a network round-trip.
 
 When ``client`` is omitted, uses ``RpcClient()`` (``AIRBUS_URL`` / host+port env,
 default ``127.0.0.1:9097``).
@@ -36,32 +40,30 @@ class Queue:
         self,
         name: str,
         *,
+        mode: QueueMode,
         client: RpcClient | None = None,
         side: DuplexSide | None = None,
+        dispatch_strategy: DispatchStrategy | None = None,
         listen_host: str | None = None,
     ) -> None:
         self._client = client if client is not None else RpcClient()
         self.name = name
+        self.mode = mode
         self.side = side
+        self.dispatch_strategy = dispatch_strategy
         self._listen_host = listen_host
         self._listener: EventListener | None = None
+        self._ensure()
 
-    def create(
-        self,
-        mode: QueueMode,
-        *,
-        dispatch_strategy: DispatchStrategy | None = None,
-    ) -> bool:
-        """Create the queue. Returns whether it was newly created."""
-        result = self._client.create_queue(
+    def _ensure(self) -> None:
+        """Create the queue if missing; raise if it exists with different config."""
+        self._client.create_queue(
             CreateQueueParams(
                 queue=self.name,
-                mode=mode,
-                dispatch_strategy=dispatch_strategy,
+                mode=self.mode,
+                dispatch_strategy=self.dispatch_strategy,
             )
         )
-        assert not isinstance(result, type(None))
-        return bool(result.created)
 
     def delete(self) -> bool:
         """Delete the queue. Returns whether it existed."""
@@ -81,7 +83,8 @@ class Queue:
         """Attach a listener. Raises RpcError if the queue does not exist or params are invalid."""
         if self._listener is not None:
             self.close()
-        listener = self._client.listen(
+        listener = EventListener(
+            self._client,
             self.name,
             on_event,
             host=self._listen_host,

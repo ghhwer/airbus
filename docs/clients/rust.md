@@ -10,8 +10,8 @@ Endpoint defaults: `AIRBUS_URL`, or `AIRBUS_HOST` / `AIRBUS_PORT`, else `127.0.0
 
 Push listeners register a callback host the daemon dials for `on_event`. The SDK
 auto-discovers that address; against a **remote** bus, override with
-`AIRBUS_LISTEN_HOST` or `Queue::with_listen_host` / `EventListener::host` if the
-detected IP is not reachable from the daemon.
+`AIRBUS_LISTEN_HOST` or `Queue::with_listen_host` if the detected IP is not reachable
+from the daemon.
 
 ## Quick start
 
@@ -32,7 +32,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 
 
-## Preferred API: `Queue`
+## Attach and queues: `Queue`
+
+`Queue::connect` / `connect_with` **require a mode** and **ensure** the queue (network
+I/O): create if missing, or error if it already exists with a different mode/strategy.
+Reuse a connection with `Some(rpc)`.
 
 ```rust
 use airbus_client::{DispatchStrategy, Queue, QueueMode};
@@ -40,9 +44,13 @@ use serde_json::{json, Map};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut q = Queue::new("pipeline_jobs", None)?;
-    q.create(QueueMode::Fifo, Some(DispatchStrategy::RoundRobin))
-        .await?;
+    let mut q = Queue::connect_with(
+        "pipeline_jobs",
+        QueueMode::Fifo,
+        Some(DispatchStrategy::RoundRobin), // fifo only; None → round_robin
+        None,
+    )
+    .await?;
 
     q.attach(
         |event| async move {
@@ -67,7 +75,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 ```rust
-let mut q = Queue::new("pipeline_jobs", None)?.with_listen_host("10.0.0.42"); // pin if needed
+let mut q = Queue::connect("pipeline_jobs", QueueMode::Fifo, None)
+    .await?
+    .with_listen_host("10.0.0.42"); // pin if needed
 ```
 
 ### Full-duplex (host ↔ device)
@@ -76,10 +86,13 @@ let mut q = Queue::new("pipeline_jobs", None)?.with_listen_host("10.0.0.42"); //
 use airbus_client::{DuplexSide, Queue, QueueMode};
 use serde_json::{json, Map};
 
-let mut host = Queue::new("link", None)?.with_side(DuplexSide::Host);
-let mut device = Queue::new("link", None)?.with_side(DuplexSide::Device);
+let mut host = Queue::connect("link", QueueMode::FullDuplex, None)
+    .await?
+    .with_side(DuplexSide::Host);
+let mut device = Queue::connect("link", QueueMode::FullDuplex, None)
+    .await?
+    .with_side(DuplexSide::Device);
 
-host.create(QueueMode::FullDuplex, None).await?;
 host.attach(|e| async move { println!("host {e}"); Ok(()) }, Some(100), None, None)
     .await?;
 device
@@ -91,8 +104,8 @@ from_host.insert("from".into(), json!("host"));
 host.post(from_host).await?;
 ```
 
-`try_attach` returns `Ok(None)` when the queue does not exist. `post` returns `Ok(false)`
-in the same case. Mode rules: [Queues & Dispatch](../queues-and-dispatch.md).
+`try_attach` returns `Ok(None)` when the queue was deleted under you. `post` returns
+`Ok(false)` in the same case. Mode rules: [Queues & Dispatch](../queues-and-dispatch.md).
 
 ## Raw RPC: `RpcClient`
 
@@ -137,22 +150,10 @@ let peeked = rpc
 Also available: `delete_queue`, `attach_listener`, `detach_listener`, `list_listeners`,
 `queue_ready`, `list_queues`, `ping`, `add`, plus `call` / `notify` / `raw`.
 
-### Listen without `Queue`
-
-```rust
-let mut listener = rpc
-    .listen("jobs")
-    .max_events(100)
-    .start(|event| async move {
-        println!("{event}");
-        Ok(()) // ack; Err(String) → JSON-RPC error to the daemon
-    })
-    .await?;
-
-listener.close().await;
-```
-
-Builder options: `host`, `exhaustion_timeout_ms`, `max_retries`, `side`.
+Push delivery still goes through `Queue::attach` (reuse the client with
+`Queue::connect("jobs", QueueMode::Broadcast, Some(rpc.clone())).await?`). Raw
+`attach_listener` only registers a host/port the daemon should dial — it does not
+bind a local listener for you.
 
 ### Batches
 
@@ -194,7 +195,7 @@ Requires an `airbus` binary (`AIRBUS_BIN`, default `out/airbus`).
 
 | Module                             | Role                                                         |
 | ---------------------------------- | ------------------------------------------------------------ |
-| root re-exports                    | `RpcClient`, `Queue`, `EventListener`, modes, `start_server` |
+| root re-exports                    | `Queue`, `RpcClient`, modes, `start_server` (`EventListener` from `attach`) |
 | `payloads`                         | Generated `*Params` / `*Result`                              |
 | `protocol` / `endpoint` / `binary` | Internals                                                    |
 

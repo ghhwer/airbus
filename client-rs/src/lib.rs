@@ -2,8 +2,10 @@
 //!
 //! Wire `*Params` / `*Result` types live under [`payloads`]. Envelope helpers are in
 //! [`protocol`]. Endpoint defaults: `AIRBUS_URL` or `AIRBUS_HOST`/`AIRBUS_PORT` (else
-//! `127.0.0.1:9097`). Push-listener callback host auto-discovers toward the peer
-//! unless `AIRBUS_LISTEN_HOST` / [`Queue::with_listen_host`] is set.
+//! `127.0.0.1:9097`). Prefer [`Queue::connect`] which ensures the queue (pass
+//! `Some(client)` to reuse an [`RpcClient`]). Push-listener callback host
+//! auto-discovers toward the peer unless `AIRBUS_LISTEN_HOST` /
+//! [`Queue::with_listen_host`] is set.
 
 pub mod binary;
 pub mod endpoint;

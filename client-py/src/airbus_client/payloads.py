@@ -31,6 +31,7 @@ class QueueInfo:
     name: str
     depth: int
     mode: QueueMode
+    dispatch_strategy: DispatchStrategy
     listener_count: int
 
 
@@ -84,6 +85,7 @@ class CreateQueueParams:
 class CreateQueueResult:
     queue: str
     mode: QueueMode
+    dispatch_strategy: DispatchStrategy
     created: bool
 
 

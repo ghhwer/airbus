@@ -265,7 +265,7 @@ impl Batch {
     }
 }
 
-/// Client-side port listener that receives real-time events pushed from Airbus.
+/// Local push-listener handle returned by [`crate::Queue::attach`].
 pub struct EventListener {
     client: RpcClient,
     queue: String,
@@ -284,7 +284,7 @@ pub struct EventListener {
 }
 
 impl EventListener {
-    fn new(client: RpcClient, queue: String) -> Self {
+    pub(crate) fn new(client: RpcClient, queue: String) -> Self {
         Self {
             client,
             queue,
@@ -304,27 +304,27 @@ impl EventListener {
     }
 
     /// Pin the callback host registered with Airbus (skips auto-discovery).
-    pub fn host(mut self, host: impl Into<String>) -> Self {
+    pub(crate) fn host(mut self, host: impl Into<String>) -> Self {
         self.host = Some(host.into());
         self
     }
 
-    pub fn exhaustion_timeout_ms(mut self, ms: u64) -> Self {
+    pub(crate) fn exhaustion_timeout_ms(mut self, ms: u64) -> Self {
         self.exhaustion_timeout_ms = Some(ms);
         self
     }
 
-    pub fn max_retries(mut self, n: u64) -> Self {
+    pub(crate) fn max_retries(mut self, n: u64) -> Self {
         self.max_retries = Some(n);
         self
     }
 
-    pub fn max_events(mut self, n: usize) -> Self {
+    pub(crate) fn max_events(mut self, n: usize) -> Self {
         self.max_events = Some(n);
         self
     }
 
-    pub fn side(mut self, side: DuplexSide) -> Self {
+    pub(crate) fn side(mut self, side: DuplexSide) -> Self {
         self.side = Some(side);
         self
     }
@@ -345,7 +345,7 @@ impl EventListener {
     ///
     /// When [`Self::host`] was not set, resolves a routable listen host toward the
     /// client's Airbus peer (see [`crate::endpoint::resolve_listen_host`]).
-    pub async fn start<F, Fut>(mut self, on_event: F) -> Result<Self, ClientError>
+    pub(crate) async fn start<F, Fut>(mut self, on_event: F) -> Result<Self, ClientError>
     where
         F: Fn(Value) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<(), String>> + Send + 'static,
@@ -641,9 +641,5 @@ impl RpcClient {
         params: &QueueReadyParams,
     ) -> Result<QueueReadyResult, ClientError> {
         self.invoke("queue_ready", Some(params)).await
-    }
-
-    pub fn listen(&self, queue: impl Into<String>) -> EventListener {
-        EventListener::new(self.clone(), queue.into())
     }
 }

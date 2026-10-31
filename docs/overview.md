@@ -41,8 +41,7 @@ pip install airbus-client
 ```python
 from airbus_client import Queue, QueueMode
 
-q = Queue("jobs")
-q.create(QueueMode.fifo)
+q = Queue("jobs", mode=QueueMode.fifo)
 q.attach(lambda e: print(e["event"]))
 q.post({"type": "hello"})
 ```

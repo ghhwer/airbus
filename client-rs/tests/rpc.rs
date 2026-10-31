@@ -6,7 +6,7 @@ use airbus_client::payloads::{
 };
 use airbus_client::protocol::RpcError;
 use airbus_client::rpc::ClientError;
-use airbus_client::{start_server, ServerGuard};
+use airbus_client::{start_server, Queue, ServerGuard};
 use serde_json::{json, Map, Value};
 use std::num::NonZeroU64;
 use std::sync::Arc;
@@ -267,28 +267,40 @@ async fn test_listen_broadcast() {
     let a = Arc::clone(&events_a);
     let b = Arc::clone(&events_b);
 
-    let mut listener_a = rpc
-        .listen(queue.clone())
-        .start(move |e| {
+    let mut qa = Queue::connect(queue.clone(), QueueMode::Broadcast, Some(rpc.clone()))
+        .await
+        .unwrap();
+    let mut qb = Queue::connect(queue.clone(), QueueMode::Broadcast, Some(rpc.clone()))
+        .await
+        .unwrap();
+    qa.attach(
+        move |e| {
             let a = Arc::clone(&a);
             async move {
                 a.lock().await.push(e);
                 Ok(())
             }
-        })
-        .await
-        .unwrap();
-    let mut listener_b = rpc
-        .listen(queue.clone())
-        .start(move |e| {
+        },
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    qb.attach(
+        move |e| {
             let b = Arc::clone(&b);
             async move {
                 b.lock().await.push(e);
                 Ok(())
             }
-        })
-        .await
-        .unwrap();
+        },
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
 
     let listed = rpc
         .list_listeners(Some(&ListListenersParams {
@@ -320,8 +332,8 @@ async fn test_listen_broadcast() {
         Some(posted.id.as_str())
     );
 
-    listener_a.close().await;
-    listener_b.close().await;
+    qa.close().await;
+    qb.close().await;
 
     let listed_after = rpc
         .list_listeners(Some(&ListListenersParams {
@@ -335,12 +347,18 @@ async fn test_listen_broadcast() {
 #[tokio::test]
 async fn test_failed_listener_start_cleans_up() {
     let guard = server().await;
-    match guard
-        .client
-        .listen(queue_name("missing"))
-        .start(|_| async { Ok(()) })
+    let name = queue_name("missing");
+    let mut q = Queue::connect(name.clone(), QueueMode::Broadcast, Some(guard.client.clone()))
         .await
-    {
+        .unwrap();
+    guard
+        .client
+        .delete_queue(&DeleteQueueParams {
+            queue: name.parse().unwrap(),
+        })
+        .await
+        .unwrap();
+    match q.attach(|_| async { Ok(()) }, None, None, None).await {
         Err(ClientError::Rpc(RpcError { message, .. })) => {
             assert!(message.contains("does not exist"));
         }
